@@ -391,3 +391,41 @@ canvas {
     width: 80vw;
   }
 }
+#mobile button.pressed {
+  background: #526e50;
+  color: #fff9e5;
+  transform: scale(0.94);
+}
+canvas:focus {
+  outline: none;
+}
+.quality-button {
+  pointer-events: auto;
+  border: 1px solid #fff9;
+  border-radius: 16px;
+  background: #fffcf1e8;
+  color: #526754;
+  padding: 12px 14px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.quality-button:hover {
+  background: #fffef6;
+}
+@media (max-width: 700px) {
+  .quality-button {
+    padding: 10px 9px;
+    font-size: 10px;
+  }
+  .top-right {
+    gap: 5px;
+  }
+}
+.side-note {
+  background: #fffcf1dd;
+  border: 1px solid #fff9;
+  border-radius: 14px;
+  padding: 11px 13px;
+  backdrop-filter: blur(6px);
+  max-width: 200px;
+}

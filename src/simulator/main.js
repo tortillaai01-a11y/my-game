@@ -1,5 +1,14 @@
 import * as THREE from "three";
 import "./style.css";
+import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
+import { MovementInput } from "./controls.js";
+import { resolvePenetration } from "./collision.js";
+import {
+  surfaceTexture,
+  furMaterial,
+  batchStatic,
+  contactShadow,
+} from "./visuals.js";
 import {
   freshNeeds,
   tickNeeds,
@@ -11,7 +20,7 @@ import {
 
 const $ = (id) => document.getElementById(id);
 document.querySelector("#app").innerHTML =
-  `<div id="interface"><div class="top"><div class="brand"><div class="logo">🐹</div><div><h1>Хомячьи будни</h1><p>Маленькая жизнь · большой уют</p></div></div><div class="top-right"><div class="pill"><i></i>Свободный день <span id="time">08:00</span></div><button class="icon-button" id="pause" title="Пауза и управление">II</button></div></div><div class="side-note"><strong>Твой маленький мир</strong>Одна клетка. Два характера.<br>Никаких заданий и спешки.<br><span id="neighbor">Сосед осматривается</span></div><div class="bottom"><button id="prompt"></button><div class="stats">${[
+  `<div id="interface"><div class="top"><div class="brand"><div class="logo">🐹</div><div><h1>Хомячьи будни</h1><p>Маленькая жизнь · большой уют</p></div></div><div class="top-right"><div class="pill"><i></i>Свободный день <span id="time">08:00</span></div><button class="quality-button" id="quality" title="Переключить качество изображения">Графика: авто</button><button class="icon-button" id="pause" title="Пауза и управление">II</button></div></div><div class="side-note"><strong>Твой маленький мир</strong>Одна клетка. Два характера.<br>Никаких заданий и спешки.<br><span id="neighbor">Сосед осматривается</span></div><div class="bottom"><button id="prompt"></button><div class="stats">${[
     ["health", "Здоровье", "♡", "#d58c7d"],
     ["stamina", "Выносливость", "ϟ", "#8f9eb5"],
     ["food", "Сытость", "◒", "#c6a36c"],
@@ -23,17 +32,48 @@ document.querySelector("#app").innerHTML =
     )
     .join(
       "",
-    )}</div><div class="controls"><span><b>WASD</b> ходить</span><span><b>SHIFT</b> бежать</span><span><b>ПРОБЕЛ</b> прыгнуть</span><span><b>E</b> действие</span><span><b>F</b> толкнуть</span><span><b>МЫШЬ + ЗАЖАТИЕ</b> обзор</span></div></div></div><div id="toast"></div><div id="hurt"></div><div id="mobile"><div class="dpad"><span></span><button data-key="KeyW">↑</button><span></span><button data-key="KeyA">←</button><button data-key="KeyS">↓</button><button data-key="KeyD">→</button></div><div class="actions"><button data-action="jump">↟</button><button data-action="interact">E</button><button data-action="fight">F</button></div></div><div id="veil"><div class="welcome"><div class="eyebrow">Симулятор хомячьей жизни</div><h2 id="modal-title">Просто быть<br>хомяком.</h2><p id="modal-text">Пошурши наполнителем, поешь, попей и покрути колесо. Рядом живёт ещё один хомяк — колесо у вас общее. Здесь некуда спешить и нечего выигрывать.</p><div class="keys">Приблизься к миске, поилке, домику или колесу и нажми <b>E</b>. Повторное нажатие завершает действие.<br><b>Колесо</b> тренирует запас выносливости до 160, но утомляет и вдвое быстрее расходует воду.<br><b>F</b> — толкнуть соседа. Осторожно: он даст сдачи!</div><button id="start">Заселиться в клетку →</button><a href="./shooter.html">Перейти к игре «Кормовой переворот»</a><p class="sub">Состояние сохраняется автоматически в этом браузере</p></div></div>`;
+    )}</div><div class="controls"><span><b>WASD / ↑↓←→</b> ходить</span><span><b>SHIFT</b> бежать</span><span><b>ПРОБЕЛ</b> прыгнуть</span><span><b>E</b> действие</span><span><b>F</b> толкнуть</span><span><b>МЫШЬ + ЗАЖАТИЕ</b> обзор</span></div></div></div><div id="toast"></div><div id="hurt"></div><div id="mobile"><div class="dpad"><span></span><button data-key="KeyW">↑</button><span></span><button data-key="KeyA">←</button><button data-key="KeyS">↓</button><button data-key="KeyD">→</button></div><div class="actions"><button data-action="jump">↟</button><button data-action="interact">E</button><button data-action="fight">F</button></div></div><div id="veil"><div class="welcome"><div class="eyebrow">Симулятор хомячьей жизни</div><h2 id="modal-title">Просто быть<br>хомяком.</h2><p id="modal-text">Пошурши наполнителем, поешь, попей и покрути колесо. Рядом живёт ещё один хомяк — колесо у вас общее. Здесь некуда спешить и нечего выигрывать.</p><div class="keys">Приблизься к миске, поилке, домику или колесу и нажми <b>E</b>. Повторное нажатие завершает действие.<br><b>Колесо</b> тренирует запас выносливости до 160, но утомляет и вдвое быстрее расходует воду.<br><b>F</b> — толкнуть соседа. Осторожно: он даст сдачи!</div><button id="start">Заселиться в клетку →</button><a href="./shooter.html">Перейти к игре «Кормовой переворот»</a><p class="sub">Состояние сохраняется автоматически в этом браузере</p></div></div>`;
 const scene = new THREE.Scene();
 scene.background = new THREE.Color("#dfe8df");
 scene.fog = new THREE.Fog("#dfe8df", 32, 68);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(innerWidth, innerHeight);
-renderer.setPixelRatio(Math.min(devicePixelRatio, 1.7));
+let qualityMode = "auto";
+try {
+  const saved = localStorage.getItem("hamster-graphics");
+  if (["auto", "high", "fast"].includes(saved)) qualityMode = saved;
+} catch {}
+let resolutionScale =
+  qualityMode === "fast"
+    ? 0.75
+    : Math.min(devicePixelRatio, qualityMode === "high" ? 2 : 1.5);
+renderer.setPixelRatio(resolutionScale);
+function updateQualityLabel() {
+  $("quality").textContent =
+    "Графика: " + { auto: "авто", high: "чётче", fast: "быстрее" }[qualityMode];
+}
+updateQualityLabel();
+$("quality").onclick = () => {
+  qualityMode = { auto: "high", high: "fast", fast: "auto" }[qualityMode];
+  resolutionScale =
+    qualityMode === "fast"
+      ? 0.75
+      : Math.min(devicePixelRatio, qualityMode === "high" ? 2 : 1.5);
+  renderer.setPixelRatio(resolutionScale);
+  updateQualityLabel();
+  try {
+    localStorage.setItem("hamster-graphics", qualityMode);
+  } catch {}
+  renderer.domElement.focus({ preventScroll: true });
+};
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
+// Cage lighting is fixed. Bake static shadows once; moving hamsters use soft
+// contact shadows so low-end machines do not redraw the whole cage twice.
+renderer.shadowMap.autoUpdate = false;
+renderer.shadowMap.needsUpdate = true;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.15;
+renderer.toneMappingExposure = 1.02;
 document.querySelector("#app").prepend(renderer.domElement);
 const camera = new THREE.PerspectiveCamera(
   52,
@@ -41,8 +81,8 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   90,
 );
-scene.add(new THREE.HemisphereLight("#fffae3", "#9aa28c", 3));
-const sun = new THREE.DirectionalLight("#fff0d2", 3);
+scene.add(new THREE.HemisphereLight("#e9f2ff", "#998464", 1.65));
+const sun = new THREE.DirectionalLight("#ffe9c7", 2.8);
 sun.position.set(-8, 22, 9);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
@@ -54,18 +94,20 @@ Object.assign(sun.shadow.camera, {
   near: 1,
   far: 65,
 });
-sun.shadow.bias = -0.001;
+sun.shadow.bias = -0.0004;
+sun.shadow.normalBias = 0.025;
+sun.shadow.radius = 3;
 scene.add(sun);
 const material = (color, roughness = 0.85, metalness = 0) =>
   new THREE.MeshStandardMaterial({ color, roughness, metalness });
 const M = {
   bedding: material("#d6bc88"),
   chip: material("#e4cba0"),
-  cream: material("#f4e9d0"),
-  fur: material("#bf8c53"),
-  pale: material("#c8bab0"),
+  cream: furMaterial("#fff0cf"),
+  fur: furMaterial("#ce985b"),
+  pale: furMaterial("#b9ada1"),
   pink: material("#d8a198"),
-  dark: material("#423d34"),
+  dark: material("#201c19", 0.18),
   green: material("#91aa93"),
   wood: material("#c89e72"),
   roof: material("#8fa7a0"),
@@ -73,12 +115,27 @@ const M = {
   water: material("#95c5c9", 0.25),
   food: material("#a98a50"),
 };
-const boxGeo = new THREE.BoxGeometry(1, 1, 1),
-  sphereGeo = new THREE.SphereGeometry(1, 18, 12);
+M.wood.map = surfaceTexture("wood");
+M.wood.bumpMap = M.wood.map;
+M.wood.bumpScale = 0.045;
+M.wood.color.set("#f0d2a5");
+M.bedding.map = surfaceTexture("bedding");
+M.bedding.color.set("#fff5d9");
+M.bedding.bumpMap = M.bedding.map;
+M.bedding.bumpScale = 0.05;
+M.water = new THREE.MeshPhysicalMaterial({
+  color: "#8cc6cf",
+  roughness: 0.15,
+  metalness: 0.1,
+  clearcoat: 1,
+  clearcoatRoughness: 0.1,
+});
+const boxGeo = new RoundedBoxGeometry(1, 1, 1, 2, 0.035),
+  sphereGeo = new THREE.SphereGeometry(1, 28, 20);
 function mesh(geo, mat, parent = scene, x = 0, y = 0, z = 0) {
   const m = new THREE.Mesh(geo, mat);
   m.position.set(x, y, z);
-  m.castShadow = true;
+  m.castShadow = !mat.transparent;
   m.receiveShadow = true;
   parent.add(m);
   return m;
@@ -134,7 +191,11 @@ function rand() {
   seed = (seed * 1664525 + 1013904223) >>> 0;
   return seed / 4294967296;
 }
-const chips = new THREE.InstancedMesh(boxGeo, M.chip, 1900),
+const chips = new THREE.InstancedMesh(
+    new THREE.BoxGeometry(1, 1, 1),
+    M.chip,
+    1900,
+  ),
   dummy = new THREE.Object3D();
 for (let i = 0; i < 1900; i++) {
   dummy.position.set(
@@ -159,7 +220,8 @@ chips.receiveShadow = true;
 scene.add(chips);
 const frontRail = material("#b7c7bb");
 frontRail.transparent = true;
-frontRail.opacity = 0.23;
+frontRail.opacity = 0.12;
+frontRail.depthWrite = false;
 for (const z of [-10.8, 10.8]) {
   box(25.8, 0.65, 0.2, M.green, scene, 0, 0.25, z);
   for (let x = -12.5; x <= 12.5; x += 1.15)
@@ -258,17 +320,56 @@ for (const [i, x] of [-10, 10].entries()) {
   stations.push({ type: "water", x, z: 0.3, name: "Попить из поилки" });
   textLabel("Вода", x, 3.9, -0.3);
 }
+// A sunlit room beyond the cage gives the small habitat a sense of scale.
+const roomWall = material("#e0d6c0");
+box(48, 23, 0.5, roomWall, scene, 0, 8, -16);
+box(14, 11, 0.3, material("#f7edd8"), scene, -9, 9, -15.6);
+box(12.8, 9.8, 0.15, material("#a8c8ce"), scene, -9, 9, -15.35);
+box(0.22, 10, 0.22, M.cream, scene, -9, 9, -15.15);
+box(13, 0.22, 0.22, M.cream, scene, -9, 9, -15.15);
+box(14, 0.3, 1.6, M.cream, scene, -9, 3.6, -15);
+for (const x of [-3.08, 3.08]) box(0.18, 3, 0.18, M.cream, home, x, 1.5, 3.1);
+box(2.6, 0.15, 0.35, M.cream, home, 0, 2.12, 3.13);
+for (const z of [-3.25, 3.25]) box(6.7, 0.12, 0.14, M.green, home, 0, 2.98, z);
+for (const x of [-3.25, 3.25]) box(0.14, 0.12, 6.7, M.green, home, x, 2.98, 0);
+const houseWindow = mesh(
+  new THREE.TorusGeometry(0.46, 0.08, 10, 32),
+  M.cream,
+  home,
+  -1.98,
+  1.7,
+  3.14,
+);
+const windowPane = cyl(
+  0.4,
+  0.4,
+  0.045,
+  material("#536659"),
+  home,
+  -1.98,
+  1.7,
+  3.16,
+);
+windowPane.rotation.x = Math.PI / 2;
+box(0.055, 0.76, 0.07, M.cream, home, -1.98, 1.7, 3.2);
+box(0.76, 0.055, 0.07, M.cream, home, -1.98, 1.7, 3.2);
+batchStatic(scene, new Set([spin, houseRoof]));
+batchStatic(spin);
+spin.traverse((o) => {
+  if (o.isMesh) o.castShadow = false;
+});
 function hamster(fur) {
   const root = new THREE.Group();
   const body = new THREE.Group();
   root.add(body);
   ball(0, 0.65, 0, 0.55, 0.59, 0.7, fur, body);
-  ball(0, 0.65, 0.52, 0.42, 0.39, 0.16, M.cream, body);
+  ball(0, 0.65, 0.58, 0.42, 0.39, 0.19, M.cream, body);
   ball(0, 1.17, 0.28, 0.57, 0.48, 0.49, fur, body);
   for (const x of [-0.4, 0.4]) {
     ball(x, 1.55, 0.24, 0.2, 0.24, 0.13, fur, body);
     ball(x, 1.56, 0.35, 0.12, 0.15, 0.035, M.pink, body);
-    ball(x * 0.65, 1.25, 0.69, 0.065, 0.08, 0.045, M.dark, body);
+    ball(x * 0.65, 1.25, 0.69, 0.075, 0.09, 0.055, M.dark, body);
+    ball(x * 0.65 - 0.018, 1.278, 0.735, 0.023, 0.025, 0.014, M.cream, body);
     ball(x * 0.75, 1.02, 0.68, 0.21, 0.18, 0.13, M.cream, body);
   }
   ball(0, 1.11, 0.8, 0.08, 0.06, 0.06, M.pink, body);
@@ -277,7 +378,52 @@ function hamster(fur) {
     for (const z of [-0.3, 0.38])
       feet.push(ball(x, 0.13, z, 0.17, 0.13, 0.23, fur, body));
   ball(0, 0.4, -0.68, 0.12, 0.12, 0.15, M.pink, body);
-  return { root, body, feet };
+  // Fine whiskers, nose bridge and a little mouth, all visible at close range.
+  const whiskers = [];
+  for (const side of [-1, 1])
+    for (let i = 0; i < 3; i++) {
+      whiskers.push(
+        side * 0.25,
+        1.04,
+        0.77,
+        side * (0.68 + i * 0.055),
+        1.01 + (i - 1) * 0.075,
+        0.82,
+      );
+    }
+  whiskers.push(
+    -0.1,
+    0.985,
+    0.795,
+    0,
+    0.96,
+    0.81,
+    0,
+    0.96,
+    0.81,
+    0.1,
+    0.985,
+    0.795,
+  );
+  const lines = new THREE.BufferGeometry();
+  lines.setAttribute("position", new THREE.Float32BufferAttribute(whiskers, 3));
+  body.add(
+    new THREE.LineSegments(
+      lines,
+      new THREE.LineBasicMaterial({
+        color: "#73604b",
+        transparent: true,
+        opacity: 0.65,
+      }),
+    ),
+  );
+  const shadow = contactShadow();
+  scene.add(shadow);
+  batchStatic(body, new Set(feet));
+  body.traverse((o) => {
+    if (o.isMesh) o.castShadow = false;
+  });
+  return { root, body, feet, shadow };
 }
 const player = hamster(M.fur),
   bot = hamster(M.pale);
@@ -285,7 +431,7 @@ scene.add(player.root, bot.root);
 player.root.position.set(0, 0, 4);
 bot.root.position.set(-4, 0, -3);
 const botLabel = textLabel("Плюш · сосед", -4, 2.3, -3);
-const keys = new Set();
+const keys = new MovementInput();
 let needs = freshNeeds(),
   botNeeds = freshNeeds();
 let paused = true,
@@ -298,7 +444,7 @@ let t = 0,
   verticalSpeed = 0,
   peak = 0,
   grounded = true,
-  yaw = 0.15,
+  yaw = 0,
   distance = 10,
   drag = false,
   pitch = 0.54,
@@ -525,7 +671,7 @@ function modal(title, text, button) {
 }
 function setPause(value) {
   paused = value;
-  keys.clear();
+  resetInput();
   save();
   if (paused)
     modal(
@@ -533,7 +679,10 @@ function setPause(value) {
       "Жизнь в клетке на паузе. Голод, жажда и сосед подождут.",
       "Вернуться к хомяку →",
     );
-  else $("veil").classList.add("hidden");
+  else {
+    $("veil").classList.add("hidden");
+    renderer.domElement.focus({ preventScroll: true });
+  }
 }
 $("start").onclick = () => {
   if (dead) {
@@ -561,62 +710,135 @@ $("pause").onclick = () => {
   if (!dead) setPause(!paused);
 };
 $("prompt").onclick = interact;
-window.addEventListener("keydown", (e) => {
-  if (
-    [
-      "Space",
-      "KeyW",
-      "KeyA",
-      "KeyS",
-      "KeyD",
-      "ArrowUp",
-      "ArrowDown",
-      "ArrowLeft",
-      "ArrowRight",
-    ].includes(e.code)
-  )
+const movementCodes = new Set([
+  "KeyW",
+  "KeyA",
+  "KeyS",
+  "KeyD",
+  "ArrowUp",
+  "ArrowLeft",
+  "ArrowDown",
+  "ArrowRight",
+  "ShiftLeft",
+  "ShiftRight",
+]);
+const actionCodes = new Set(["Space", "KeyE", "KeyF", "Escape"]);
+let cameraPointer = null,
+  pointerX = 0,
+  pointerY = 0;
+renderer.domElement.tabIndex = 0;
+renderer.domElement.style.outline = "none";
+function resetInput() {
+  keys.clear();
+  drag = false;
+  cameraPointer = null;
+  document
+    .querySelectorAll("[data-key]")
+    .forEach((b) => b.classList.remove("pressed"));
+}
+window.addEventListener(
+  "keydown",
+  (e) => {
+    if (e.code === "Escape") {
+      e.preventDefault();
+      if (!e.repeat && !dead) setPause(!paused);
+      return;
+    }
+    if (e.ctrlKey || e.metaKey || e.altKey) {
+      resetInput();
+      return;
+    }
+    if (
+      paused ||
+      dead ||
+      e.target.closest?.('input,textarea,select,[contenteditable="true"]')
+    )
+      return;
+    if (!movementCodes.has(e.code) && !actionCodes.has(e.code)) return;
     e.preventDefault();
-  keys.add(e.code);
-  if (e.repeat) return;
-  if (e.code === "KeyE") interact();
-  if (e.code === "Space") jump();
-  if (e.code === "KeyF") pushBot();
-  if (e.code === "Escape" && !dead) setPause(!paused);
-});
-window.addEventListener("keyup", (e) => keys.delete(e.code));
+    if (movementCodes.has(e.code)) keys.press(e.code, e.repeat);
+    if (e.repeat) return;
+    if (e.code === "KeyE") interact();
+    if (e.code === "Space") jump();
+    if (e.code === "KeyF") pushBot();
+  },
+  { capture: true },
+);
+window.addEventListener(
+  "keyup",
+  (e) => {
+    keys.release(e.code);
+  },
+  { capture: true },
+);
 window.addEventListener("blur", () => {
+  resetInput();
   if (!paused && !dead) setPause(true);
 });
+window.addEventListener("focus", resetInput);
 document.addEventListener("visibilitychange", () => {
-  if (document.hidden && !paused && !dead) setPause(true);
+  if (document.hidden) {
+    resetInput();
+    if (!paused && !dead) setPause(true);
+  }
 });
-window.addEventListener("pagehide", save);
+window.addEventListener("pagehide", () => {
+  resetInput();
+  save();
+});
+renderer.domElement.addEventListener("contextmenu", (e) => e.preventDefault());
 renderer.domElement.addEventListener("pointerdown", (e) => {
+  if (paused || dead || cameraPointer !== null) return;
+  renderer.domElement.focus({ preventScroll: true });
+  cameraPointer = e.pointerId;
+  pointerX = e.clientX;
+  pointerY = e.clientY;
   drag = true;
   renderer.domElement.setPointerCapture(e.pointerId);
 });
-renderer.domElement.addEventListener("pointerup", () => (drag = false));
-renderer.domElement.addEventListener("pointercancel", () => (drag = false));
-renderer.domElement.addEventListener("pointermove", (e) => {
-  if (drag) {
-    yaw -= e.movementX * 0.006;
-    pitch = THREE.MathUtils.clamp(pitch + e.movementY * 0.003, 0.2, 1.1);
+function releasePointer(e) {
+  keys.releasePointer(e.pointerId);
+  if (cameraPointer === e.pointerId) {
+    cameraPointer = null;
+    drag = false;
   }
+  document
+    .querySelectorAll("[data-key]")
+    .forEach((b) => b.classList.toggle("pressed", keys.has(b.dataset.key)));
+}
+window.addEventListener("pointerup", releasePointer, { capture: true });
+window.addEventListener("pointercancel", releasePointer, { capture: true });
+window.addEventListener("lostpointercapture", releasePointer, {
+  capture: true,
+});
+renderer.domElement.addEventListener("pointermove", (e) => {
+  if (!drag || e.pointerId !== cameraPointer) return;
+  yaw -= (e.clientX - pointerX) * 0.006;
+  pitch = THREE.MathUtils.clamp(
+    pitch + (e.clientY - pointerY) * 0.003,
+    0.22,
+    1.1,
+  );
+  pointerX = e.clientX;
+  pointerY = e.clientY;
 });
 renderer.domElement.addEventListener(
   "wheel",
   (e) => {
-    distance = THREE.MathUtils.clamp(distance + e.deltaY * 0.008, 6, 17);
+    e.preventDefault();
+    distance = THREE.MathUtils.clamp(distance + e.deltaY * 0.008, 5, 17);
   },
-  { passive: true },
+  { passive: false },
 );
 for (const b of document.querySelectorAll("[data-key]")) {
-  b.onpointerdown = (e) => {
+  b.addEventListener("pointerdown", (e) => {
     e.preventDefault();
+    if (paused || dead) return;
+    keys.holdPointer(e.pointerId, b.dataset.key);
+    b.classList.add("pressed");
     b.setPointerCapture(e.pointerId);
-    keys.add(b.dataset.key);
-  };
-  b.onpointerup = b.onpointercancel = () => keys.delete(b.dataset.key);
+  });
+  b.addEventListener("pointerleave", releasePointer);
 }
 for (const b of document.querySelectorAll("[data-action]"))
   b.onclick = () => ({ jump, interact, fight: pushBot })[b.dataset.action]();
@@ -746,12 +968,9 @@ function update(dt) {
   worldTime += dt;
   actionCooldown = Math.max(0, actionCooldown - dt);
   const p = player.root.position;
-  let dx =
-      (keys.has("KeyD") || keys.has("ArrowRight") ? 1 : 0) -
-      (keys.has("KeyA") || keys.has("ArrowLeft") ? 1 : 0),
-    dz =
-      (keys.has("KeyS") || keys.has("ArrowDown") ? 1 : 0) -
-      (keys.has("KeyW") || keys.has("ArrowUp") ? 1 : 0);
+  const { x: inputX, z: inputZ } = keys.axes();
+  let dx = inputX,
+    dz = inputZ;
   const moving = !!(dx || dz);
   if (moving && activity !== "rest") stop();
   const sprint =
@@ -795,7 +1014,12 @@ function update(dt) {
         wz = -dx * Math.sin(yaw) + dz * Math.cos(yaw);
       const speed = sprint ? 5 : 2.6;
       move(player.root, wx * speed * dt, wz * speed * dt);
-      player.root.rotation.y = Math.atan2(wx, wz);
+      const wanted = Math.atan2(wx, wz);
+      const turn = Math.atan2(
+        Math.sin(wanted - player.root.rotation.y),
+        Math.cos(wanted - player.root.rotation.y),
+      );
+      player.root.rotation.y += turn * (1 - Math.exp(-dt * 18));
     }
     const floor = surface(p.x, p.z, p.y);
     if (grounded && floor >= p.y - 0.15 && floor <= p.y + 0.35) {
@@ -820,6 +1044,11 @@ function update(dt) {
         grounded = true;
         peak = floor;
       }
+    }
+    if (grounded) {
+      const free = resolvePenetration(p, solids);
+      p.x = free.x;
+      p.z = free.z;
     }
     animateHamster(player, moving, t);
   }
@@ -873,23 +1102,56 @@ function hud() {
     String(minutes % 60).padStart(2, "0");
 }
 const target = new THREE.Vector3();
+let hudAccumulator = 0.1;
+let frameSamples = 0,
+  frameSeconds = 0;
+
 function frame(now) {
   requestAnimationFrame(frame);
-  const dt = Math.min((now - lastFrame) / 1000, 0.05);
+  const elapsed = Math.max(0, (now - lastFrame) / 1000);
+  const dt = Math.min(elapsed, 0.05);
+  // Favor responsive input over unnecessary pixels on slower GPUs.
+  if (elapsed < 1) {
+    frameSamples++;
+    frameSeconds += elapsed;
+  }
+  if (frameSamples >= 16) {
+    if (
+      qualityMode === "auto" &&
+      frameSeconds / frameSamples > 0.04 &&
+      resolutionScale > 0.65
+    ) {
+      resolutionScale = Math.max(0.65, resolutionScale - 0.25);
+      renderer.setPixelRatio(resolutionScale);
+    }
+    frameSamples = 0;
+    frameSeconds = 0;
+  }
   lastFrame = now;
   if (!paused) update(dt);
   if (toastTimer > 0) {
     toastTimer -= dt;
     if (toastTimer <= 0) $("toast").style.opacity = 0;
   }
-  hud();
+  hudAccumulator += dt;
+  if (hudAccumulator >= 0.1) {
+    hud();
+    hudAccumulator = 0;
+  }
+  for (const h of [player, bot]) {
+    const p = h.root.position,
+      ground = surface(p.x, p.z, p.y);
+    h.shadow.position.set(p.x, ground + 0.13, p.z);
+    h.shadow.material.opacity = Math.max(0.15, 1 - (p.y - ground) * 0.23);
+  }
   target.copy(player.root.position).add(new THREE.Vector3(0, 0.85, 0));
   const offset = new THREE.Vector3(
     Math.sin(yaw) * Math.cos(pitch) * distance,
     Math.sin(pitch) * distance,
     Math.cos(yaw) * Math.cos(pitch) * distance,
   );
-  camera.position.lerp(target.clone().add(offset), 1 - Math.exp(-dt * 8));
+  // Follow translation exactly: releasing a key also stops the view immediately.
+  camera.position.copy(target).add(offset);
   camera.lookAt(target);
   const p = player.root.position;
   houseRoof.material.opacity =
@@ -909,6 +1171,10 @@ window.simulatorState = () => ({
   position: player.root.position.toArray(),
   botPosition: bot.root.position.toArray(),
   paused,
+  input: keys.axes(),
+  renderCalls: renderer.info.render.calls,
+  resolutionScale,
+  qualityMode,
   activity,
   botActivity,
   wheelOwner,
