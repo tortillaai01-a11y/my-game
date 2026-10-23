@@ -4,7 +4,7 @@ test("arena renders, player moves, shoots, reloads, and pauses", async ({
 }) => {
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await page.goto("/");
+  await page.goto("/my-game/");
   await expect(page.locator("#play")).toBeVisible();
   await page.waitForFunction(() => window.gameState);
   expect(await page.evaluate(() => gameState().botHp)).toEqual([

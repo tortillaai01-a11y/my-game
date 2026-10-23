@@ -24,3 +24,11 @@ npm run preview
 Модели созданы процедурно, внешние игровые ресурсы и ключи API не нужны. Интернет для игры не требуется; при недоступности Google Fonts используются системные шрифты.
 
 Браузерная проверка: `npm run test:e2e`. Используется Chromium из `/usr/bin/chromium`; другой путь можно передать через `CHROMIUM_PATH`.
+
+## Публикация на GitHub Pages
+
+Адрес после успешной публикации: https://tortillaai01-a11y.github.io/my-game/
+
+В GitHub открой **Settings → Pages → Build and deployment → Source** и выбери **GitHub Actions**. Workflow `Publish game to GitHub Pages` автоматически тестирует, собирает и публикует игру при обновлении `main`. Для первой публикации после включения Pages открой **Actions → Publish game to GitHub Pages → Run workflow → main**.
+
+Vite использует базовый путь `/my-game/`, чтобы ресурсы загружались по адресу репозитория. Для проверки готовой сборки запусти `npm run build` и `npm run preview`, затем открой `/my-game/` на сервере предпросмотра.
