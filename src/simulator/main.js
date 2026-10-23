@@ -323,7 +323,8 @@ function save() {
       "hamster-life-v1",
       JSON.stringify({
         needs,
-        position: player.root.position.toArray(),
+        position:
+          activity === "wheel" ? [-6, 0, -2.9] : player.root.position.toArray(),
         worldTime,
       }),
     );

@@ -129,3 +129,21 @@ test("the neighbor uses the only wheel and can be challenged for it", async ({
   await page.keyboard.press("KeyE");
   await page.waitForFunction(() => simulatorState().wheelOwner === "player");
 });
+
+test("reloading during wheel training returns the hamster beside the wheel", async ({
+  page,
+}) => {
+  await enter(page, [-6, 0, -2.8]);
+  await page.keyboard.press("KeyE");
+  await page.waitForFunction(() => simulatorState().activity === "wheel");
+  await page.keyboard.press("Escape");
+  await page.reload();
+  await page.waitForFunction(() => window.simulatorState);
+  expect((await page.evaluate(() => simulatorState())).position).toEqual([
+    -6, 0, -2.9,
+  ]);
+  await page.locator("#start").click();
+  await page.keyboard.down("KeyS");
+  await page.waitForFunction(() => simulatorState().position[2] > -2.5);
+  await page.keyboard.up("KeyS");
+});
