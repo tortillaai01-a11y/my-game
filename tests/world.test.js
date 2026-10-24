@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  wantsPlace,
+  cellKey,
   createSupply,
   consumeSupply,
   advanceSupply,
@@ -43,4 +45,26 @@ test("burrows avoid props and cage edges and use stable grid cells", () => {
     canDigCell(tunnelCell(0, 0), [{ x: 0, z: 0, rx: 2, rz: 2 }]),
     false,
   );
+});
+
+test("Plush claims only the place he currently wants", () => {
+  for (const action of [
+    "wander",
+    "seek-food",
+    "seek-water",
+    "food",
+    "water",
+    "angry",
+  ])
+    assert.equal(wantsPlace(action), null);
+  assert.equal(wantsPlace("seek-wheel"), "wheel");
+  assert.equal(wantsPlace("seek-sleep"), "house");
+  assert.equal(wantsPlace("sleep"), "house");
+});
+test("tunnel levels do not overwrite each other and old cells remain on level one", () => {
+  assert.notEqual(
+    cellKey({ x: 0, z: 0, level: 1 }),
+    cellKey({ x: 0, z: 0, level: 5 }),
+  );
+  assert.equal(cellKey({ x: 0, z: 0 }), cellKey({ x: 0, z: 0, level: 1 }));
 });

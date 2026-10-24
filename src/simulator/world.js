@@ -2,6 +2,14 @@ export const REFILL_SECONDS = 30;
 export const SUPPLY_CAPACITY = 60;
 export const TUNNEL_SIZE = 1.5;
 export const TUNNEL_DEPTH = -1.65;
+export const MAX_TUNNEL_LEVEL = 5;
+export function wantsPlace(activity) {
+  return activity === "seek-wheel" || activity === "wheel"
+    ? "wheel"
+    : activity === "seek-sleep" || activity === "sleep"
+      ? "house"
+      : null;
+}
 export function createSupply(saved) {
   const stock = Number.isFinite(saved?.stock)
     ? Math.max(0, Math.min(SUPPLY_CAPACITY, saved.stock))
@@ -54,7 +62,7 @@ export function tunnelCell(x, z) {
   return { x: Math.round(x / TUNNEL_SIZE), z: Math.round(z / TUNNEL_SIZE) };
 }
 export function cellKey(c) {
-  return `${c.x},${c.z}`;
+  return `${c.x},${c.z},${c.level ?? 1}`;
 }
 export function canDigCell(c, obstacles) {
   const x = c.x * TUNNEL_SIZE,

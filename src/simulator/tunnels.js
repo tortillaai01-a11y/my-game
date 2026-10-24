@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import {
+  MAX_TUNNEL_LEVEL,
   TUNNEL_SIZE,
   TUNNEL_DEPTH,
   cellKey,
@@ -9,6 +10,7 @@ import {
 export class Tunnels {
   constructor(scene, material) {
     this.cells = new Map();
+    this.level = 1;
     this.obstacles = [];
     this.canvas = document.createElement("canvas");
     this.canvas.width = this.canvas.height = 512;
@@ -64,14 +66,20 @@ if(texture2D(tunnelMask,(tunnelWorld+vec2(13.,11.))/vec2(26.,22.)).r>.5)discard;
     };
     material.customProgramCacheKey = () => "hamster-tunnel-cut-v1";
   }
-  has(x, z) {
-    return this.cells.has(cellKey(tunnelCell(x, z)));
+  setLevel(level) {
+    this.level = level;
+    this.rebuild();
+  }
+  has(x, z, level = this.level) {
+    return this.cells.has(cellKey({ ...tunnelCell(x, z), level }));
   }
   allowed(x, z) {
     return canDigCell(tunnelCell(x, z), this.obstacles);
   }
-  carve(x, z) {
-    const cell = tunnelCell(x, z),
+  carve(x, z, level = this.level) {
+    if (!Number.isInteger(level) || level < 1 || level > MAX_TUNNEL_LEVEL)
+      return false;
+    const cell = { ...tunnelCell(x, z), level },
       key = cellKey(cell);
     if (this.cells.has(key)) return true;
     if (this.cells.size >= 320 || !canDigCell(cell, this.obstacles))
@@ -86,9 +94,12 @@ if(texture2D(tunnelMask,(tunnelWorld+vec2(13.,11.))/vec2(26.,22.)).r>.5)discard;
       if (
         Number.isInteger(c?.x) &&
         Number.isInteger(c?.z) &&
+        Number.isInteger(c.level ?? 1) &&
+        (c.level ?? 1) >= 1 &&
+        (c.level ?? 1) <= MAX_TUNNEL_LEVEL &&
         canDigCell(c, this.obstacles)
       )
-        this.cells.set(cellKey(c), { x: c.x, z: c.z });
+        this.cells.set(cellKey(c), { x: c.x, z: c.z, level: c.level ?? 1 });
     this.rebuild();
   }
   clear() {
@@ -106,6 +117,8 @@ if(texture2D(tunnelMask,(tunnelWorld+vec2(13.,11.))/vec2(26.,22.)).r>.5)discard;
     this.ctx.fillRect(0, 0, 512, 512);
     this.ctx.fillStyle = "white";
     for (const c of this.cells.values()) {
+      if ((c.level ?? 1) !== this.level) continue;
+      const depth = TUNNEL_DEPTH * this.level;
       const x = c.x * TUNNEL_SIZE,
         z = c.z * TUNNEL_SIZE;
       this.ctx.fillRect(
@@ -114,7 +127,7 @@ if(texture2D(tunnelMask,(tunnelWorld+vec2(13.,11.))/vec2(26.,22.)).r>.5)discard;
         (TUNNEL_SIZE / 26) * 512 + 0.5,
         (TUNNEL_SIZE / 22) * 512 + 0.5,
       );
-      d.position.set(x, TUNNEL_DEPTH - 0.04, z);
+      d.position.set(x, depth - 0.04, z);
       d.scale.set(1, 1, 1);
       d.updateMatrix();
       this.floor.setMatrixAt(f++, d.matrix);
@@ -124,17 +137,18 @@ if(texture2D(tunnelMask,(tunnelWorld+vec2(13.,11.))/vec2(26.,22.)).r>.5)discard;
         [0, 1],
         [0, -1],
       ]) {
-        if (this.cells.has(cellKey({ x: c.x + dx, z: c.z + dz }))) continue;
+        if (
+          this.cells.has(
+            cellKey({ x: c.x + dx, z: c.z + dz, level: this.level }),
+          )
+        )
+          continue;
         d.position.set(
           x + (dx * TUNNEL_SIZE) / 2,
-          TUNNEL_DEPTH / 2,
+          depth / 2,
           z + (dz * TUNNEL_SIZE) / 2,
         );
-        d.scale.set(
-          dx ? 0.1 : TUNNEL_SIZE,
-          -TUNNEL_DEPTH,
-          dz ? 0.1 : TUNNEL_SIZE,
-        );
+        d.scale.set(dx ? 0.1 : TUNNEL_SIZE, -depth, dz ? 0.1 : TUNNEL_SIZE);
         d.updateMatrix();
         this.walls.setMatrixAt(w, d.matrix);
         d.position.y = 0.09;

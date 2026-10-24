@@ -45,19 +45,51 @@ test("Plush initiates repeated attacks for the wheel and stops when it is freed"
   expect(await page.evaluate(() => simulatorState().needs.health)).toBe(hp);
   expect(errors).toEqual([]);
 });
-test("Plush enters the house to defend it and gives up after the player leaves", async ({
+test("Plush leaves the occupied house alone when he does not want to sleep", async ({
   page,
 }) => {
   const errors = await start(page, { position: [6, 0, -3.2] });
-  await page.waitForFunction(() => simulatorState().territory === "house");
-  await page.waitForFunction(() => simulatorState().needs.health < 100);
-  await page.keyboard.down("KeyS");
-  await page.waitForFunction(() => simulatorState().position[2] > -1.3);
-  await page.keyboard.up("KeyS");
-  await page.waitForFunction(() => simulatorState().territory === null);
-  const hp = await page.evaluate(() => simulatorState().needs.health);
-  await page.waitForTimeout(1800);
-  expect(await page.evaluate(() => simulatorState().needs.health)).toBe(hp);
+  await page.waitForTimeout(4000);
+  expect(await page.evaluate(() => simulatorState().territory)).toBe(null);
+  expect(await page.evaluate(() => simulatorState().needs.health)).toBe(100);
+  expect(errors).toEqual([]);
+});
+test("deep tunnels descend five levels, preserve depth and allow climbing", async ({
+  page,
+}) => {
+  const errors = await start(page);
+  await page.keyboard.press("KeyB");
+  await page.waitForFunction(() => simulatorState().position[1] < -1);
+  for (let level = 2; level <= 5; level++) {
+    await page.keyboard.press("KeyQ");
+    await page.waitForFunction(
+      (level) => simulatorState().tunnelLevel === level,
+      level,
+    );
+  }
+  expect(await page.evaluate(() => simulatorState().position[1])).toBeCloseTo(
+    -8.25,
+  );
+  await page.keyboard.press("KeyQ");
+  expect(await page.evaluate(() => simulatorState().tunnelLevel)).toBe(5);
+  await page.keyboard.down("KeyD");
+  await page.waitForFunction(
+    () => simulatorState().tunnels.filter((c) => c.level === 5).length >= 2,
+  );
+  await page.keyboard.up("KeyD");
+  await page.keyboard.press("Escape");
+  await page.reload();
+  await page.waitForFunction(() => window.simulatorState);
+  expect(await page.evaluate(() => simulatorState().tunnelLevel)).toBe(5);
+  expect(await page.evaluate(() => simulatorState().position[1])).toBeCloseTo(
+    -8.25,
+  );
+  await page.locator("#start").click();
+  await page.keyboard.press("KeyR");
+  await page.waitForFunction(() => simulatorState().tunnelLevel === 4);
+  await page.screenshot({ path: "/tmp/deep-tunnels.png" });
+  await page.keyboard.press("KeyB");
+  await page.waitForFunction(() => !simulatorState().burrowing);
   expect(errors).toEqual([]);
 });
 test("digging creates connected traversable tunnels, spends stamina and survives reload", async ({

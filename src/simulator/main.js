@@ -7,6 +7,8 @@ import {
   consumeSupply,
   advanceSupply,
   claimedPlace,
+  wantsPlace,
+  MAX_TUNNEL_LEVEL,
   tunnelCell,
   TUNNEL_DEPTH,
   TUNNEL_SIZE,
@@ -42,7 +44,7 @@ document.querySelector("#app").innerHTML =
     )
     .join(
       "",
-    )}</div><div class="controls"><span><b>WASD / ↑↓←→</b> ходить</span><span><b>SHIFT</b> бежать</span><span><b>ПРОБЕЛ</b> прыгнуть</span><span><b>E</b> действие</span><span><b>F</b> толкнуть</span><span><b>B</b> рыть</span><span><b>МЫШЬ + ЗАЖАТИЕ</b> обзор</span></div></div></div><div id="toast"></div><div id="hurt"></div><div id="mobile"><div class="dpad"><span></span><button data-key="KeyW">↑</button><span></span><button data-key="KeyA">←</button><button data-key="KeyS">↓</button><button data-key="KeyD">→</button></div><div class="actions"><button data-action="jump">↟</button><button data-action="interact">E</button><button data-action="fight">F</button><button data-action="dig">B</button></div></div><div id="veil"><div class="welcome"><div class="eyebrow">Симулятор хомячьей жизни</div><h2 id="modal-title">Просто быть<br>хомяком.</h2><p id="modal-text">Пошурши наполнителем, поешь, попей и покрути колесо. Рядом живёт ещё один хомяк — колесо у вас общее. Здесь некуда спешить и нечего выигрывать.</p><div class="keys">Приблизься к миске, поилке, домику или колесу и нажми <b>E</b>. Повторное нажатие завершает действие.<br><b>Колесо</b> тренирует запас выносливости до 250, но утомляет и вдвое быстрее расходует воду.<br><b>F</b> — толкнуть соседа. Плюш защищает дом и колесо — освободи их, чтобы он успокоился.<br><b>B</b> — рыть тоннель / выбраться; WASD — прокладывать ход. Тоннели показаны в разрезе.<br>Пустые миски и поилки пополняются через 30 секунд.</div><button id="start">Заселиться в клетку →</button><a href="./shooter.html">Перейти к игре «Кормовой переворот»</a><p class="sub">Состояние сохраняется автоматически в этом браузере</p></div></div>`;
+    )}</div><div class="controls"><span><b>WASD / ↑↓←→</b> ходить</span><span><b>SHIFT</b> бежать</span><span><b>ПРОБЕЛ</b> прыгнуть</span><span><b>E</b> действие</span><span><b>F</b> толкнуть</span><span><b>B</b> рыть</span><span><b>МЫШЬ + ЗАЖАТИЕ</b> обзор</span></div></div></div><div id="toast"></div><div id="hurt"></div><div id="mobile"><div class="dpad"><span></span><button data-key="KeyW">↑</button><span></span><button data-key="KeyA">←</button><button data-key="KeyS">↓</button><button data-key="KeyD">→</button></div><div class="actions"><button data-action="jump">↟</button><button data-action="interact">E</button><button data-action="fight">F</button><button data-action="dig">B</button><button data-action="deeper">Q ↓</button><button data-action="higher">R ↑</button></div></div><div id="veil"><div class="welcome"><div class="eyebrow">Симулятор хомячьей жизни</div><h2 id="modal-title">Просто быть<br>хомяком.</h2><p id="modal-text">Пошурши наполнителем, поешь, попей и покрути колесо. Рядом живёт ещё один хомяк — колесо у вас общее. Здесь некуда спешить и нечего выигрывать.</p><div class="keys">Приблизься к миске, поилке, домику или колесу и нажми <b>E</b>. Повторное нажатие завершает действие.<br><b>Колесо</b> тренирует запас выносливости до 250, но утомляет и вдвое быстрее расходует воду.<br><b>F</b> — толкнуть соседа. Плюш требует дом или колесо, только когда сам хочет спать или бегать.<br><b>B</b> — рыть тоннель / выбраться; WASD — прокладывать ход, <b>Q / R</b> — глубже / выше (5 уровней). Тоннели показаны в разрезе.<br>Пустые миски и поилки пополняются через 30 секунд.</div><button id="start">Заселиться в клетку →</button><a href="./shooter.html">Перейти к игре «Кормовой переворот»</a><p class="sub">Состояние сохраняется автоматически в этом браузере</p></div></div>`;
 const scene = new THREE.Scene();
 scene.background = new THREE.Color("#dfe8df");
 scene.fog = new THREE.Fog("#dfe8df", 32, 68);
@@ -530,7 +532,9 @@ let activeStation = null,
   digProgress = 0;
 let savedTunnels = [],
   savedBurrowing = false,
-  territory = null;
+  territory = null,
+  tunnelLevel = 1,
+  botDesire = null;
 
 let storageWorks = true;
 function notify(message) {
@@ -551,6 +555,7 @@ function save() {
         supplies: stations.map((s) => ({ id: s.id, ...s.supply })),
         tunnels: tunnels.snapshot(),
         burrowing,
+        tunnelLevel,
       }),
     );
   } catch {
@@ -590,6 +595,9 @@ try {
       );
     savedTunnels = s.tunnels || [];
     savedBurrowing = s.burrowing === true;
+    tunnelLevel = Number.isInteger(s.tunnelLevel)
+      ? THREE.MathUtils.clamp(s.tunnelLevel, 1, MAX_TUNNEL_LEVEL)
+      : 1;
   }
 } catch {
   storageWorks = false;
@@ -611,6 +619,7 @@ const solids = [
 ];
 tunnels.obstacles = solids;
 tunnels.restore(savedTunnels);
+tunnels.setLevel(tunnelLevel);
 if (
   savedBurrowing &&
   tunnels.has(player.root.position.x, player.root.position.z)
@@ -618,7 +627,7 @@ if (
   burrowing = true;
   activity = "dig";
   grounded = true;
-  player.root.position.y = TUNNEL_DEPTH;
+  player.root.position.y = TUNNEL_DEPTH * tunnelLevel;
 }
 function canMove(x, z, y) {
   return (
@@ -656,6 +665,8 @@ function stop() {
   }
   if (burrowing) {
     burrowing = false;
+    tunnelLevel = 1;
+    tunnels.setLevel(1);
     player.root.position.y = 0;
     verticalSpeed = 0;
     grounded = true;
@@ -739,7 +750,9 @@ function interact() {
     player.root.position.set(6, 0, -4.5);
     verticalSpeed = 0;
     grounded = true;
-    notify("Сон восстанавливает здоровье. Но Плюш тоже хочет в дом!");
+    notify(
+      "Сон восстанавливает здоровье. Плюш придёт сюда, когда захочет отдохнуть.",
+    );
   }
 }
 function toggleDig() {
@@ -764,14 +777,33 @@ function toggleDig() {
   activity = "dig";
   verticalSpeed = 0;
   if (tunnels.has(p.x, p.z)) {
-    p.y = TUNNEL_DEPTH;
+    p.y = TUNNEL_DEPTH * tunnelLevel;
     digTarget = null;
   } else {
     const c = tunnelCell(p.x, p.z);
     digTarget = { x: c.x * TUNNEL_SIZE, z: c.z * TUNNEL_SIZE };
     digProgress = 0;
   }
-  notify("WASD — прокладывать тоннель. B или E — выбраться.");
+  notify("WASD — рыть, Q — глубже, R — выше, B — поверхность.");
+}
+function changeDepth(direction) {
+  if (paused || dead || !burrowing || digTarget) return;
+  const level = tunnelLevel + direction;
+  if (level < 1 || level > MAX_TUNNEL_LEVEL) {
+    notify(
+      level < 1
+        ? "B — выбраться на поверхность."
+        : "Это самое дно: пятый уровень.",
+    );
+    return;
+  }
+  if (needs.stamina < 10) {
+    notify("Сначала отдохни.");
+    return;
+  }
+  const c = tunnelCell(player.root.position.x, player.root.position.z);
+  digTarget = { x: c.x * TUNNEL_SIZE, z: c.z * TUNNEL_SIZE, level };
+  digProgress = 0;
 }
 function updateDig(dt, dx, dz) {
   const p = player.root.position;
@@ -784,9 +816,13 @@ function updateDig(dt, dx, dz) {
     digProgress += dt;
     player.body.rotation.x = Math.sin(t * 18) * 0.12;
     if (digProgress >= 0.7) {
-      if (tunnels.carve(digTarget.x, digTarget.z))
-        p.set(digTarget.x, TUNNEL_DEPTH, digTarget.z);
-      else notify("Здесь мешает предмет или край клетки.");
+      if (
+        tunnels.carve(digTarget.x, digTarget.z, digTarget.level ?? tunnelLevel)
+      ) {
+        tunnelLevel = digTarget.level ?? tunnelLevel;
+        tunnels.setLevel(tunnelLevel);
+        p.set(digTarget.x, TUNNEL_DEPTH * tunnelLevel, digTarget.z);
+      } else notify("Здесь мешает предмет или край клетки.");
       digTarget = null;
       digProgress = 0;
     }
@@ -902,8 +938,9 @@ $("start").onclick = () => {
     burrowing = false;
     digTarget = null;
     digProgress = 0;
-    territory = null;
+    ((territory = null), (tunnelLevel = 1), (botDesire = null));
     activeStation = botStation = null;
+    tunnels.setLevel(1);
     tunnels.clear();
     for (const station of stations) station.supply = createSupply();
     dead = false;
@@ -931,7 +968,15 @@ const movementCodes = new Set([
   "ShiftLeft",
   "ShiftRight",
 ]);
-const actionCodes = new Set(["Space", "KeyE", "KeyF", "KeyB", "Escape"]);
+const actionCodes = new Set([
+  "Space",
+  "KeyE",
+  "KeyF",
+  "KeyB",
+  "KeyQ",
+  "KeyR",
+  "Escape",
+]);
 let cameraPointer = null,
   pointerX = 0,
   pointerY = 0;
@@ -971,6 +1016,8 @@ window.addEventListener(
     if (e.code === "Space") jump();
     if (e.code === "KeyF") pushBot();
     if (e.code === "KeyB") toggleDig();
+    if (e.code === "KeyQ") changeDepth(1);
+    if (e.code === "KeyR") changeDepth(-1);
   },
   { capture: true },
 );
@@ -1052,7 +1099,14 @@ for (const b of document.querySelectorAll("[data-key]")) {
 }
 for (const b of document.querySelectorAll("[data-action]"))
   b.onclick = () =>
-    ({ jump, interact, fight: pushBot, dig: toggleDig })[b.dataset.action]();
+    ({
+      jump,
+      interact,
+      fight: pushBot,
+      dig: toggleDig,
+      deeper: () => changeDepth(1),
+      higher: () => changeDepth(-1),
+    })[b.dataset.action]();
 function animateHamster(h, moving, time) {
   h.body.position.y = moving
     ? Math.sin(time * 15) * 0.045
@@ -1083,7 +1137,7 @@ function defendTerritory(dt) {
   const resource = burrowing
     ? null
     : claimedPlace(player.root.position, activity, wheelOwner);
-  if (resource && botNeeds.health > 0) {
+  if (resource && resource === botDesire && botNeeds.health > 0) {
     if (territory !== resource) {
       territory = resource;
       botCooldown = Math.max(0.8, botCooldown);
@@ -1125,10 +1179,10 @@ function defendTerritory(dt) {
   }
   if (territory) {
     territory = null;
-    botActivity = "wander";
-    botTimer = 4;
+    botActivity = botDesire === "wheel" ? "seek-wheel" : "seek-sleep";
+    botTimer = 20;
     botCooldown = 1;
-    botTarget.set(0, 0, 1);
+    botTarget.set(...(botDesire === "wheel" ? [-6, 0, -2.9] : [6, 0, -0.8]));
     notify("Ты освободил место. Плюш успокоился.");
   }
   return false;
@@ -1145,14 +1199,15 @@ function botUpdate(dt) {
         ? "sleep"
         : "rest",
   );
+  if (botActivity !== "territorial") botDesire = wantsPlace(botActivity);
   if (defendTerritory(dt)) return;
   const p = bot.root.position;
   const distanceToPlayer = p.distanceTo(player.root.position);
   if (botNeeds.health < 15 && botActivity !== "sleep") {
     if (wheelOwner === "bot") wheelOwner = null;
-    botActivity = "sleep";
+    botActivity = "seek-sleep";
     botTimer = 30;
-    p.set(6, 0, -5);
+    botTarget.set(6, 0, -0.8);
   }
   if (botActivity === "angry") {
     if (distanceToPlayer < 2.2 && botCooldown <= 0 && botNeeds.stamina >= 15) {
@@ -1174,9 +1229,9 @@ function botUpdate(dt) {
     if (wheelOwner !== "bot" || botNeeds.stamina < 3 || botTimer <= 0) {
       if (wheelOwner === "bot") wheelOwner = null;
       p.set(-4, 0, -2.5);
-      botActivity = "wander";
-      botTimer = 8;
-      botTarget.set(0, 0, 1);
+      botActivity = "seek-sleep";
+      botTimer = 20;
+      botTarget.set(6, 0, -0.8);
     } else {
       animateHamster(bot, true, t);
       return;
@@ -1197,7 +1252,7 @@ function botUpdate(dt) {
     return;
   }
   if (botActivity === "sleep") {
-    if (botTimer <= 0 && botNeeds.health > 60) {
+    if (botTimer <= 0 && botNeeds.health > 60 && botNeeds.stamina > 85) {
       botActivity = "wander";
       p.set(6, 0, -0.8);
       botTimer = 3;
@@ -1222,7 +1277,10 @@ function botUpdate(dt) {
       botStation = available("food");
       botTarget.set(botStation.x, 0, 7);
       botActivity = "seek-food";
-    } else if (!wheelOwner && botNeeds.stamina > 45) {
+    } else if (botNeeds.stamina < 65 || botNeeds.health < 70) {
+      botTarget.set(6, 0, -0.8);
+      botActivity = "seek-sleep";
+    } else if (botNeeds.stamina > 75 && rand() < 0.65) {
       botTarget.set(-6, 0, -2.9);
       botActivity = "seek-wheel";
     } else {
@@ -1252,6 +1310,12 @@ function botUpdate(dt) {
     } else {
       botActivity = "wander";
       botTimer = 0;
+    }
+  } else if (botActivity === "seek-sleep") {
+    if (claimedPlace(player.root.position, activity, wheelOwner) !== "house") {
+      botActivity = "sleep";
+      botTimer = 20;
+      p.set(6, 0, -5);
     }
   } else if (botActivity === "seek-water") botActivity = "water";
   else if (botActivity === "seek-food") botActivity = "food";
@@ -1385,6 +1449,7 @@ function update(dt, resourceDt = dt) {
       food: "Плюш ест",
       water: "Плюш пьёт",
       "seek-wheel": "Плюш идёт к колесу",
+      "seek-sleep": "Плюш хочет отдохнуть в домике",
     }[botActivity] || "Плюш гуляет по клетке";
   if (needs.health <= 0) {
     dead = true;
@@ -1429,7 +1494,7 @@ function hud() {
   if (burrowing && n)
     n.name = digTarget
       ? `Рою ход… ${Math.min(100, Math.round((digProgress / 0.7) * 100))}% · B — выбраться`
-      : "Тоннель · WASD — рыть · B — выбраться";
+      : `Глубина ${tunnelLevel}/5 · WASD — рыть · Q — глубже · R — выше · B — поверхность`;
   $("prompt").innerHTML = paused ? "" : n ? `<kbd>E</kbd>${n.name}` : "";
   const minutes = 8 * 60 + Math.floor(worldTime * 2);
   $("time").textContent =
@@ -1482,7 +1547,7 @@ function frame(now) {
     h.shadow.material.opacity = Math.max(0.15, 1 - (p.y - ground) * 0.23);
   }
   target.copy(player.root.position).add(new THREE.Vector3(0, 0.85, 0));
-  const viewPitch = burrowing ? Math.max(pitch, 1.2) : pitch;
+  const viewPitch = burrowing ? Math.PI / 2 : pitch;
   const offset = new THREE.Vector3(
     Math.sin(yaw) * Math.cos(viewPitch) * distance,
     Math.sin(viewPitch) * distance,
@@ -1517,6 +1582,8 @@ window.simulatorState = () => ({
   botActivity,
   wheelOwner,
   burrowing,
+  tunnelLevel,
+  botDesire,
   digProgress,
   territory,
   tunnels: tunnels.snapshot(),
