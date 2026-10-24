@@ -1,4 +1,4 @@
-export const MAX_CAPACITY = 160;
+export const MAX_CAPACITY = 250;
 export function freshNeeds() {
   return { health: 100, food: 100, water: 100, stamina: 100, capacity: 100 };
 }
@@ -13,7 +13,9 @@ export function tickNeeds(state, dt, activity = "rest") {
   if (wheel && s.stamina > 0)
     s.capacity = clamp(s.capacity + dt * 0.5, MAX_CAPACITY);
   s.stamina = clamp(
-    s.stamina + dt * (wheel ? -8 : sprint ? -6 : sleep ? 14 : 7),
+    s.stamina +
+      dt *
+        (wheel ? -8 : activity === "dig" ? -5 : sprint ? -6 : sleep ? 14 : 7),
     s.capacity,
   );
   if (s.food === 0 || s.water === 0) s.health = clamp(s.health - dt * 2.5);

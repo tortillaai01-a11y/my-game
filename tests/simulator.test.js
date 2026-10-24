@@ -16,13 +16,13 @@ test("wheel training raises capacity but spends stamina and exactly doubles thir
   assert.ok(idle.food < 100);
   assert.equal(s.stamina, 100);
 });
-test("training capacity is limited to 160; rest restores only current stamina", () => {
-  const s = { ...freshNeeds(), capacity: 159, stamina: 100 };
+test("training capacity is limited to 250; rest restores only current stamina", () => {
+  const s = { ...freshNeeds(), capacity: 249, stamina: 100 };
   const trained = tickNeeds(s, 5, "wheel");
-  assert.equal(trained.capacity, 160);
+  assert.equal(trained.capacity, 250);
   const rested = tickNeeds({ ...trained, stamina: 0 }, 60);
-  assert.equal(rested.capacity, 160);
-  assert.equal(rested.stamina, 160);
+  assert.equal(rested.capacity, 250);
+  assert.equal(rested.stamina, 250);
 });
 test("starvation harms health; sleep heals only with food and water", () => {
   assert.ok(tickNeeds({ ...freshNeeds(), food: 0 }, 2).health < 100);

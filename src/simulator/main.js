@@ -1,6 +1,16 @@
 import * as THREE from "three";
 import "./style.css";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
+import { Tunnels } from "./tunnels.js";
+import {
+  createSupply,
+  consumeSupply,
+  advanceSupply,
+  claimedPlace,
+  tunnelCell,
+  TUNNEL_DEPTH,
+  TUNNEL_SIZE,
+} from "./world.js";
 import { MovementInput } from "./controls.js";
 import { resolvePenetration } from "./collision.js";
 import {
@@ -32,7 +42,7 @@ document.querySelector("#app").innerHTML =
     )
     .join(
       "",
-    )}</div><div class="controls"><span><b>WASD / ↑↓←→</b> ходить</span><span><b>SHIFT</b> бежать</span><span><b>ПРОБЕЛ</b> прыгнуть</span><span><b>E</b> действие</span><span><b>F</b> толкнуть</span><span><b>МЫШЬ + ЗАЖАТИЕ</b> обзор</span></div></div></div><div id="toast"></div><div id="hurt"></div><div id="mobile"><div class="dpad"><span></span><button data-key="KeyW">↑</button><span></span><button data-key="KeyA">←</button><button data-key="KeyS">↓</button><button data-key="KeyD">→</button></div><div class="actions"><button data-action="jump">↟</button><button data-action="interact">E</button><button data-action="fight">F</button></div></div><div id="veil"><div class="welcome"><div class="eyebrow">Симулятор хомячьей жизни</div><h2 id="modal-title">Просто быть<br>хомяком.</h2><p id="modal-text">Пошурши наполнителем, поешь, попей и покрути колесо. Рядом живёт ещё один хомяк — колесо у вас общее. Здесь некуда спешить и нечего выигрывать.</p><div class="keys">Приблизься к миске, поилке, домику или колесу и нажми <b>E</b>. Повторное нажатие завершает действие.<br><b>Колесо</b> тренирует запас выносливости до 160, но утомляет и вдвое быстрее расходует воду.<br><b>F</b> — толкнуть соседа. Осторожно: он даст сдачи!</div><button id="start">Заселиться в клетку →</button><a href="./shooter.html">Перейти к игре «Кормовой переворот»</a><p class="sub">Состояние сохраняется автоматически в этом браузере</p></div></div>`;
+    )}</div><div class="controls"><span><b>WASD / ↑↓←→</b> ходить</span><span><b>SHIFT</b> бежать</span><span><b>ПРОБЕЛ</b> прыгнуть</span><span><b>E</b> действие</span><span><b>F</b> толкнуть</span><span><b>B</b> рыть</span><span><b>МЫШЬ + ЗАЖАТИЕ</b> обзор</span></div></div></div><div id="toast"></div><div id="hurt"></div><div id="mobile"><div class="dpad"><span></span><button data-key="KeyW">↑</button><span></span><button data-key="KeyA">←</button><button data-key="KeyS">↓</button><button data-key="KeyD">→</button></div><div class="actions"><button data-action="jump">↟</button><button data-action="interact">E</button><button data-action="fight">F</button><button data-action="dig">B</button></div></div><div id="veil"><div class="welcome"><div class="eyebrow">Симулятор хомячьей жизни</div><h2 id="modal-title">Просто быть<br>хомяком.</h2><p id="modal-text">Пошурши наполнителем, поешь, попей и покрути колесо. Рядом живёт ещё один хомяк — колесо у вас общее. Здесь некуда спешить и нечего выигрывать.</p><div class="keys">Приблизься к миске, поилке, домику или колесу и нажми <b>E</b>. Повторное нажатие завершает действие.<br><b>Колесо</b> тренирует запас выносливости до 250, но утомляет и вдвое быстрее расходует воду.<br><b>F</b> — толкнуть соседа. Плюш защищает дом и колесо — освободи их, чтобы он успокоился.<br><b>B</b> — рыть тоннель / выбраться; WASD — прокладывать ход. Тоннели показаны в разрезе.<br>Пустые миски и поилки пополняются через 30 секунд.</div><button id="start">Заселиться в клетку →</button><a href="./shooter.html">Перейти к игре «Кормовой переворот»</a><p class="sub">Состояние сохраняется автоматически в этом браузере</p></div></div>`;
 const scene = new THREE.Scene();
 scene.background = new THREE.Color("#dfe8df");
 scene.fog = new THREE.Fog("#dfe8df", 32, 68);
@@ -180,12 +190,31 @@ function textLabel(text, x, y, z) {
   );
   s.scale.set(3, 0.56, 1);
   s.position.set(x, y, z);
+  s.userData.text = text;
+  s.userData.setText = (value) => {
+    if (s.userData.text === value) return;
+    s.userData.text = value;
+    ctx.clearRect(0, 0, 512, 96);
+    ctx.fillStyle = "#fff9e9";
+    ctx.beginPath();
+    ctx.roundRect(0, 0, 512, 96, 30);
+    ctx.fill();
+    ctx.fillStyle = "#5c6d5d";
+    ctx.font = "600 28px Arial";
+    ctx.fillText(value, 256, 59);
+    map.needsUpdate = true;
+  };
   scene.add(s);
   return s;
 }
-box(26, 1, 22, M.green, scene, 0, -0.6, 0);
+const tunnels = new Tunnels(scene, M.bedding);
+const baseMaterial = M.green.clone(),
+  tableMaterial = material("#c2c5b1");
+for (const m of [baseMaterial, tableMaterial, M.bedding, M.chip])
+  tunnels.cut(m);
+box(26, 1, 22, baseMaterial, scene, 0, -0.6, 0);
 box(25, 0.18, 21, M.bedding, scene, 0, -0.04, 0);
-box(45, 0.7, 37, material("#c2c5b1"), scene, 0, -1.45, 0);
+box(45, 0.7, 37, tableMaterial, scene, 0, -1.45, 0);
 let seed = 713;
 function rand() {
   seed = (seed * 1664525 + 1013904223) >>> 0;
@@ -284,41 +313,77 @@ for (let i = 0; i < 11; i++)
   box(1.7, 0.09, 0.13, M.cream, scene, 8, 0.15 + i * 0.29, 3.8 - i * 0.55);
 textLabel("Дом · отдых и сон", 6, 4.2, -5);
 const stations = [];
+const dynamicSupplies = new Set();
 for (const [i, x] of [-8, 8].entries()) {
   const g = new THREE.Group();
   g.position.set(x, 0, 5.4);
   scene.add(g);
   cyl(1.1, 0.9, 0.52, i ? M.roof : M.green, g, 0, 0.3, 0);
-  cyl(0.94, 0.94, 0.06, M.food, g, 0, 0.57, 0);
+  const contents = new THREE.Group();
+  contents.position.y = 0.57;
+  g.add(contents);
+  dynamicSupplies.add(contents);
+  cyl(0.94, 0.94, 0.06, M.food, contents, 0, 0, 0);
+  const rim = mesh(
+    new THREE.TorusGeometry(1.02, 0.065, 8, 32),
+    i ? M.roof : M.green,
+    g,
+    0,
+    0.56,
+    0,
+  );
+  rim.rotation.x = Math.PI / 2;
   for (let j = 0; j < 28; j++) {
     const a = rand() * 6.28,
       r = rand() * 0.8;
     ball(
       Math.cos(a) * r,
-      0.65 + rand() * 0.06,
+      0.08 + rand() * 0.06,
       Math.sin(a) * r,
       0.12,
       0.07,
       0.08,
       j % 2 ? M.wood : M.cream,
-      g,
+      contents,
     );
   }
-  stations.push({ type: "food", x, z: 5.4, name: "Поесть из миски" });
-  textLabel("Корм", x, 1.8, 5.4);
+  stations.push({
+    id: `food-${i}`,
+    type: "food",
+    x,
+    z: 5.4,
+    name: "Поесть из миски",
+    supply: createSupply(),
+    visual: contents,
+    label: textLabel("Корм · 60 / 60", x, 1.8, 5.4),
+  });
 }
 for (const [i, x] of [-10, 10].entries()) {
   const g = new THREE.Group();
   g.position.set(x, 0, -0.3);
   scene.add(g);
   box(0.16, 3, 0.16, M.metal, g, 0, 1.5, -0.3);
-  const bottle = cyl(0.42, 0.42, 1.8, M.water, g, 0, 2.3, 0);
+  const glass = material("#d6eaeb", 0.2);
+  glass.transparent = true;
+  glass.opacity = 0.22;
+  glass.depthWrite = false;
+  cyl(0.45, 0.45, 1.9, glass, g, 0, 2.3, 0);
+  const bottle = cyl(0.4, 0.4, 1.8, M.water, g, 0, 2.3, 0);
+  dynamicSupplies.add(bottle);
   cyl(0.46, 0.46, 0.2, i ? M.roof : M.green, g, 0, 3.3, 0);
   const nozzle = cyl(0.09, 0.09, 0.7, M.metal, g, 0, 1.2, 0.25);
   nozzle.rotation.x = -0.6;
   ball(0, 0.87, 0.46, 0.12, 0.13, 0.12, M.water, g);
-  stations.push({ type: "water", x, z: 0.3, name: "Попить из поилки" });
-  textLabel("Вода", x, 3.9, -0.3);
+  stations.push({
+    id: `water-${i}`,
+    type: "water",
+    x,
+    z: 0.3,
+    name: "Попить из поилки",
+    supply: createSupply(),
+    visual: bottle,
+    label: textLabel("Вода · 60 / 60", x, 3.9, -0.3),
+  });
 }
 // A sunlit room beyond the cage gives the small habitat a sense of scale.
 const roomWall = material("#e0d6c0");
@@ -353,8 +418,10 @@ const windowPane = cyl(
 windowPane.rotation.x = Math.PI / 2;
 box(0.055, 0.76, 0.07, M.cream, home, -1.98, 1.7, 3.2);
 box(0.76, 0.055, 0.07, M.cream, home, -1.98, 1.7, 3.2);
-batchStatic(scene, new Set([spin, houseRoof]));
+batchStatic(scene, new Set([spin, houseRoof, ...dynamicSupplies]));
 batchStatic(spin);
+for (const station of stations)
+  if (station.type === "food") batchStatic(station.visual);
 spin.traverse((o) => {
   if (o.isMesh) o.castShadow = false;
 });
@@ -456,6 +523,15 @@ let t = 0,
   toastTimer = 0;
 let botTarget = new THREE.Vector3(-4, 0, -3);
 let lastCapacity = 100;
+let activeStation = null,
+  botStation = null,
+  burrowing = false,
+  digTarget = null,
+  digProgress = 0;
+let savedTunnels = [],
+  savedBurrowing = false,
+  territory = null;
+
 let storageWorks = true;
 function notify(message) {
   $("toast").textContent = message;
@@ -472,6 +548,9 @@ function save() {
         position:
           activity === "wheel" ? [-6, 0, -2.9] : player.root.position.toArray(),
         worldTime,
+        supplies: stations.map((s) => ({ id: s.id, ...s.supply })),
+        tunnels: tunnels.snapshot(),
+        burrowing,
       }),
     );
   } catch {
@@ -505,6 +584,12 @@ try {
     }
     worldTime = Number.isFinite(s.worldTime) ? s.worldTime : 0;
     lastCapacity = Math.floor(needs.capacity);
+    for (const station of stations)
+      station.supply = createSupply(
+        s.supplies?.find?.((v) => v.id === station.id),
+      );
+    savedTunnels = s.tunnels || [];
+    savedBurrowing = s.burrowing === true;
   }
 } catch {
   storageWorks = false;
@@ -524,6 +609,17 @@ const solids = [
     h: s.type === "water" ? 3.5 : 0.6,
   })),
 ];
+tunnels.obstacles = solids;
+tunnels.restore(savedTunnels);
+if (
+  savedBurrowing &&
+  tunnels.has(player.root.position.x, player.root.position.z)
+) {
+  burrowing = true;
+  activity = "dig";
+  grounded = true;
+  player.root.position.y = TUNNEL_DEPTH;
+}
 function canMove(x, z, y) {
   return (
     Math.abs(x) < 12.1 &&
@@ -558,6 +654,15 @@ function stop() {
     player.root.position.set(-6, 0, -2.9);
     grounded = true;
   }
+  if (burrowing) {
+    burrowing = false;
+    player.root.position.y = 0;
+    verticalSpeed = 0;
+    grounded = true;
+    digTarget = null;
+    digProgress = 0;
+  }
+  activeStation = null;
   activity = "rest";
 }
 function nearby() {
@@ -568,13 +673,22 @@ function nearby() {
       name:
         activity === "wheel"
           ? "Сойти с колеса"
-          : activity === "sleep"
-            ? "Проснуться"
-            : "Закончить",
+          : activity === "dig"
+            ? "Выбраться из тоннеля"
+            : activity === "sleep"
+              ? "Проснуться"
+              : "Закончить",
     };
   if (p.y < 0.7) {
     for (const s of stations)
-      if (Math.hypot(p.x - s.x, p.z - s.z) < 2.25) return s;
+      if (Math.hypot(p.x - s.x, p.z - s.z) < 2.25)
+        return {
+          ...s,
+          name:
+            s.supply.stock > 0
+              ? `${s.name} · ${Math.ceil(s.supply.stock)} / 60`
+              : `Пусто · пополнение через ${Math.ceil(s.supply.refill)} с`,
+        };
     if (Math.hypot(p.x + 6, p.z + 5) < 3.7)
       return {
         type: "wheel",
@@ -610,12 +724,100 @@ function interact() {
     player.root.rotation.y = Math.PI / 2;
     verticalSpeed = 0;
   }
+  if (n.type === "food" || n.type === "water") {
+    activeStation = stations.find((s) => s.id === n.id);
+    if (!activeStation.supply.stock) {
+      notify(
+        `Запас появится через ${Math.ceil(activeStation.supply.refill)} с.`,
+      );
+      activeStation = null;
+      return;
+    }
+  }
   activity = n.type;
-  if (activity === "sleep")
-    notify("Сон восстанавливает здоровье, если ты сыт и напоен.");
+  if (activity === "sleep") {
+    player.root.position.set(6, 0, -4.5);
+    verticalSpeed = 0;
+    grounded = true;
+    notify("Сон восстанавливает здоровье. Но Плюш тоже хочет в дом!");
+  }
+}
+function toggleDig() {
+  if (paused || dead) return;
+  if (burrowing) {
+    stop();
+    notify("Ты выбрался на поверхность.");
+    return;
+  }
+  const p = player.root.position;
+  if (!grounded || p.y > 0.2 || !tunnels.allowed(p.x, p.z)) {
+    notify("Рыть можно в свободном наполнителе, подальше от предметов.");
+    return;
+  }
+  if (needs.stamina < 10) {
+    notify("Для рытья нужно немного отдохнуть.");
+    return;
+  }
+  stop();
+  needs.stamina -= 5;
+  burrowing = true;
+  activity = "dig";
+  verticalSpeed = 0;
+  if (tunnels.has(p.x, p.z)) {
+    p.y = TUNNEL_DEPTH;
+    digTarget = null;
+  } else {
+    const c = tunnelCell(p.x, p.z);
+    digTarget = { x: c.x * TUNNEL_SIZE, z: c.z * TUNNEL_SIZE };
+    digProgress = 0;
+  }
+  notify("WASD — прокладывать тоннель. B или E — выбраться.");
+}
+function updateDig(dt, dx, dz) {
+  const p = player.root.position;
+  if (needs.stamina < 1) {
+    stop();
+    notify("Лапки устали — пора отдохнуть.");
+    return;
+  }
+  if (digTarget) {
+    digProgress += dt;
+    player.body.rotation.x = Math.sin(t * 18) * 0.12;
+    if (digProgress >= 0.7) {
+      if (tunnels.carve(digTarget.x, digTarget.z))
+        p.set(digTarget.x, TUNNEL_DEPTH, digTarget.z);
+      else notify("Здесь мешает предмет или край клетки.");
+      digTarget = null;
+      digProgress = 0;
+    }
+  } else if (dx || dz) {
+    const wx = dx * Math.cos(yaw) + dz * Math.sin(yaw),
+      wz = -dx * Math.sin(yaw) + dz * Math.cos(yaw);
+    const x = p.x + wx * 1.9 * dt,
+      z = p.z + wz * 1.9 * dt;
+    player.root.rotation.y = Math.atan2(wx, wz);
+    if (tunnels.allowed(x, z)) {
+      if (tunnels.has(x, z)) {
+        p.x = x;
+        p.z = z;
+      } else {
+        const previous = tunnelCell(p.x, p.z),
+          next = tunnelCell(x, z);
+        // Carve one cardinal neighbor at a time: diagonal input cannot create disconnected holes.
+        if (previous.x !== next.x && previous.z !== next.z) next.z = previous.z;
+        digTarget = { x: next.x * TUNNEL_SIZE, z: next.z * TUNNEL_SIZE };
+        digProgress = 0;
+      }
+    }
+  }
+  animateHamster(player, !!(digTarget || dx || dz), t * 1.4);
 }
 function jump() {
   if (paused || dead || !grounded) return;
+  if (burrowing) {
+    stop();
+    return;
+  }
   if (activity !== "rest") stop();
   if (needs.stamina < 8) {
     notify("Не хватает сил для прыжка.");
@@ -697,6 +899,13 @@ $("start").onclick = () => {
     verticalSpeed = 0;
     grounded = true;
     peak = 0;
+    burrowing = false;
+    digTarget = null;
+    digProgress = 0;
+    territory = null;
+    activeStation = botStation = null;
+    tunnels.clear();
+    for (const station of stations) station.supply = createSupply();
     dead = false;
     save();
   }
@@ -722,7 +931,7 @@ const movementCodes = new Set([
   "ShiftLeft",
   "ShiftRight",
 ]);
-const actionCodes = new Set(["Space", "KeyE", "KeyF", "Escape"]);
+const actionCodes = new Set(["Space", "KeyE", "KeyF", "KeyB", "Escape"]);
 let cameraPointer = null,
   pointerX = 0,
   pointerY = 0;
@@ -761,6 +970,7 @@ window.addEventListener(
     if (e.code === "KeyE") interact();
     if (e.code === "Space") jump();
     if (e.code === "KeyF") pushBot();
+    if (e.code === "KeyB") toggleDig();
   },
   { capture: true },
 );
@@ -841,7 +1051,8 @@ for (const b of document.querySelectorAll("[data-key]")) {
   b.addEventListener("pointerleave", releasePointer);
 }
 for (const b of document.querySelectorAll("[data-action]"))
-  b.onclick = () => ({ jump, interact, fight: pushBot })[b.dataset.action]();
+  b.onclick = () =>
+    ({ jump, interact, fight: pushBot, dig: toggleDig })[b.dataset.action]();
 function animateHamster(h, moving, time) {
   h.body.position.y = moving
     ? Math.sin(time * 15) * 0.045
@@ -852,6 +1063,75 @@ function animateHamster(h, moving, time) {
         0.13 +
         (moving ? Math.max(0, Math.sin(time * 15 + i * Math.PI)) * 0.1 : 0)),
   );
+}
+function walkBotTo(target, dt, speed = 1.7) {
+  const p = bot.root.position,
+    direction = target.clone().sub(p).setY(0);
+  if (direction.length() < 0.25) {
+    animateHamster(bot, false, t);
+    return;
+  }
+  direction.normalize();
+  const before = p.clone();
+  move(bot.root, direction.x * dt * speed, direction.z * dt * speed);
+  if (p.distanceToSquared(before) < 0.00001)
+    move(bot.root, -direction.z * dt * speed, direction.x * dt * speed);
+  bot.root.rotation.y = Math.atan2(direction.x, direction.z);
+  animateHamster(bot, true, t);
+}
+function defendTerritory(dt) {
+  const resource = burrowing
+    ? null
+    : claimedPlace(player.root.position, activity, wheelOwner);
+  if (resource && botNeeds.health > 0) {
+    if (territory !== resource) {
+      territory = resource;
+      botCooldown = Math.max(0.8, botCooldown);
+      notify(
+        resource === "wheel"
+          ? "Плюш требует колесо! Сойди с него, чтобы прекратить драку."
+          : "Плюш защищает дом! Выйди наружу, чтобы он успокоился.",
+      );
+    }
+    if (wheelOwner === "bot") {
+      wheelOwner = null;
+      bot.root.position.set(-4, 0, -2.5);
+    }
+    botActivity = "territorial";
+    bot.body.rotation.z = 0;
+    const target = player.root.position.clone();
+    if (resource === "wheel") target.set(-6, 0, -2.7);
+    else if (claimedPlace(bot.root.position, "rest", null) !== "house") {
+      const p = bot.root.position;
+      if (Math.abs(p.x - 6) > 1 || p.z > -0.6) target.set(6, 0, -0.8);
+      else target.set(6, 0, -3.2);
+    }
+    walkBotTo(target, dt, 2.9);
+    const sameRoom = claimedPlace(bot.root.position, "rest", null) === "house";
+    const distance = bot.root.position.distanceTo(player.root.position);
+    if (
+      distance < (resource === "wheel" ? 3.15 : 2.2) &&
+      (resource === "wheel" || sameRoom) &&
+      botCooldown <= 0
+    ) {
+      const hit = fight(botNeeds, needs);
+      if (hit) {
+        botNeeds = hit.attacker;
+        damage(12);
+        botCooldown = 1.4;
+      }
+    }
+    return true;
+  }
+  if (territory) {
+    territory = null;
+    botActivity = "wander";
+    botTimer = 4;
+    botCooldown = 1;
+    botTarget.set(0, 0, 1);
+    notify("Ты освободил место. Плюш успокоился.");
+  }
+  return false;
 }
 function botUpdate(dt) {
   botTimer -= dt;
@@ -865,6 +1145,7 @@ function botUpdate(dt) {
         ? "sleep"
         : "rest",
   );
+  if (defendTerritory(dt)) return;
   const p = bot.root.position;
   const distanceToPlayer = p.distanceTo(player.root.position);
   if (botNeeds.health < 15 && botActivity !== "sleep") {
@@ -903,8 +1184,12 @@ function botUpdate(dt) {
   }
   if (botActivity === "food" || botActivity === "water") {
     const key = botActivity;
-    botNeeds[key] = Math.min(100, botNeeds[key] + dt * 13);
-    if (botNeeds[key] >= 99) {
+    if (botStation)
+      botNeeds[key] += consumeSupply(
+        botStation.supply,
+        Math.min(100 - botNeeds[key], dt * 13),
+      );
+    if (botNeeds[key] >= 99 || !botStation || botStation.supply.stock <= 0) {
       botActivity = "wander";
       botTimer = 3;
     }
@@ -922,11 +1207,20 @@ function botUpdate(dt) {
   }
   bot.body.rotation.z = 0;
   if (botTimer <= 0 && botActivity !== "angry") {
-    if (botNeeds.water < 65) {
-      botTarget.set(10, 0, 1.6);
+    const available = (type) =>
+      stations
+        .filter((s) => s.type === type && s.supply.stock > 0)
+        .sort(
+          (a, b) =>
+            Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z),
+        )[0];
+    if (botNeeds.water < 65 && available("water")) {
+      botStation = available("water");
+      botTarget.set(botStation.x, 0, 1.6);
       botActivity = "seek-water";
-    } else if (botNeeds.food < 65) {
-      botTarget.set(8, 0, 7);
+    } else if (botNeeds.food < 65 && available("food")) {
+      botStation = available("food");
+      botTarget.set(botStation.x, 0, 7);
       botActivity = "seek-food";
     } else if (!wheelOwner && botNeeds.stamina > 45) {
       botTarget.set(-6, 0, -2.9);
@@ -963,7 +1257,8 @@ function botUpdate(dt) {
   else if (botActivity === "seek-food") botActivity = "food";
   animateHamster(bot, moving, t);
 }
-function update(dt) {
+function update(dt, resourceDt = dt) {
+  for (const station of stations) advanceSupply(station.supply, resourceDt);
   t += dt;
   worldTime += dt;
   actionCooldown = Math.max(0, actionCooldown - dt);
@@ -972,7 +1267,7 @@ function update(dt) {
   let dx = inputX,
     dz = inputZ;
   const moving = !!(dx || dz);
-  if (moving && activity !== "rest") stop();
+  if (moving && activity !== "rest" && !burrowing) stop();
   const sprint =
     moving &&
     (keys.has("ShiftLeft") || keys.has("ShiftRight")) &&
@@ -980,9 +1275,19 @@ function update(dt) {
   needs = tickNeeds(
     needs,
     dt,
-    activity === "rest" ? (sprint ? "sprint" : "rest") : activity,
+    burrowing
+      ? moving || digTarget
+        ? "dig"
+        : "rest"
+      : activity === "rest"
+        ? sprint
+          ? "sprint"
+          : "rest"
+        : activity,
   );
-  if (activity === "wheel") {
+  if (burrowing) {
+    updateDig(dt, dx, dz);
+  } else if (activity === "wheel") {
     spin.rotation.z -= dt * 5;
     animateHamster(player, true, t);
     if (needs.stamina < 1) {
@@ -999,9 +1304,21 @@ function update(dt) {
     player.body.rotation.z = 0.8;
   } else {
     player.body.rotation.z = 0;
+    player.body.rotation.x = 0;
     if (activity === "food" || activity === "water") {
-      needs[activity] = Math.min(100, needs[activity] + dt * 15);
-      if (needs[activity] >= 100) {
+      if (activeStation)
+        needs[activity] += consumeSupply(
+          activeStation.supply,
+          Math.min(100 - needs[activity], dt * 15),
+        );
+      if (!activeStation || activeStation.supply.stock <= 0) {
+        notify("Запас закончился. Пополнение через 30 секунд.");
+        stop();
+      }
+      if (
+        (activity === "food" || activity === "water") &&
+        needs[activity] >= 100
+      ) {
         notify(activity === "food" ? "Вкусно! Ты наелся." : "Жажда утолена.");
         stop();
       }
@@ -1060,6 +1377,10 @@ function update(dt) {
     {
       wheel: "Плюш крутит колесо",
       angry: "Плюш сердится",
+      territorial:
+        territory === "wheel"
+          ? "Плюш требует освободить колесо!"
+          : "Плюш требует выйти из дома!",
       sleep: "Плюш спит в домике",
       food: "Плюш ест",
       water: "Плюш пьёт",
@@ -1085,6 +1406,17 @@ function update(dt) {
   }
 }
 function hud() {
+  for (const s of stations) {
+    const fraction = s.supply.stock / s.supply.capacity;
+    s.visual.visible = fraction > 0;
+    s.visual.scale.y = Math.max(0.02, fraction);
+    if (s.type === "water") s.visual.position.y = 1.4 + 0.9 * fraction;
+    s.label.userData.setText(
+      s.supply.stock > 0
+        ? `${s.type === "food" ? "Корм" : "Вода"} · ${Math.ceil(s.supply.stock)} / 60`
+        : `Пополнение · ${Math.ceil(s.supply.refill)} с`,
+    );
+  }
   for (const key of ["health", "stamina", "food", "water"]) {
     const max = key === "stamina" ? needs.capacity : 100;
     $(key).textContent =
@@ -1094,6 +1426,10 @@ function hud() {
     $("card-" + key).classList.toggle("low", needs[key] < 20);
   }
   const n = nearby();
+  if (burrowing && n)
+    n.name = digTarget
+      ? `Рою ход… ${Math.min(100, Math.round((digProgress / 0.7) * 100))}% · B — выбраться`
+      : "Тоннель · WASD — рыть · B — выбраться";
   $("prompt").innerHTML = paused ? "" : n ? `<kbd>E</kbd>${n.name}` : "";
   const minutes = 8 * 60 + Math.floor(worldTime * 2);
   $("time").textContent =
@@ -1128,7 +1464,7 @@ function frame(now) {
     frameSeconds = 0;
   }
   lastFrame = now;
-  if (!paused) update(dt);
+  if (!paused) update(dt, elapsed);
   if (toastTimer > 0) {
     toastTimer -= dt;
     if (toastTimer <= 0) $("toast").style.opacity = 0;
@@ -1141,14 +1477,16 @@ function frame(now) {
   for (const h of [player, bot]) {
     const p = h.root.position,
       ground = surface(p.x, p.z, p.y);
+    h.shadow.visible = h !== player || !burrowing;
     h.shadow.position.set(p.x, ground + 0.13, p.z);
     h.shadow.material.opacity = Math.max(0.15, 1 - (p.y - ground) * 0.23);
   }
   target.copy(player.root.position).add(new THREE.Vector3(0, 0.85, 0));
+  const viewPitch = burrowing ? Math.max(pitch, 1.2) : pitch;
   const offset = new THREE.Vector3(
-    Math.sin(yaw) * Math.cos(pitch) * distance,
-    Math.sin(pitch) * distance,
-    Math.cos(yaw) * Math.cos(pitch) * distance,
+    Math.sin(yaw) * Math.cos(viewPitch) * distance,
+    Math.sin(viewPitch) * distance,
+    Math.cos(yaw) * Math.cos(viewPitch) * distance,
   );
   // Follow translation exactly: releasing a key also stops the view immediately.
   camera.position.copy(target).add(offset);
@@ -1178,6 +1516,11 @@ window.simulatorState = () => ({
   activity,
   botActivity,
   wheelOwner,
+  burrowing,
+  digProgress,
+  territory,
+  tunnels: tunnels.snapshot(),
+  supplies: stations.map((s) => ({ id: s.id, type: s.type, ...s.supply })),
   dead,
   objects: { hamsters: 2, wheels: 1, houses: 1, bowls: 2, drinkers: 2 },
 });

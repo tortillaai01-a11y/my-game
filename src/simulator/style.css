@@ -429,3 +429,9 @@ canvas:focus {
   backdrop-filter: blur(6px);
   max-width: 200px;
 }
+#mobile .actions {
+  display: grid;
+  grid-template-columns: repeat(2, 46px);
+  align-content: end;
+  gap: 6px;
+}
