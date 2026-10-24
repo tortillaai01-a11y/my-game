@@ -38,6 +38,19 @@ export function surfaceTexture(kind) {
       );
     ctx.stroke();
   }
+  if (kind === "wood") {
+    for (let row = 0; row < 160; row++) {
+      ctx.beginPath();
+      ctx.strokeStyle = `rgba(78,45,20,${0.035 + random() * 0.075})`;
+      ctx.lineWidth = 0.35 + random() * 0.7;
+      for (let x = 0; x <= 256; x += 4) {
+        const y = row * 1.6 + Math.sin(x / 45 + row * 0.09) * 2;
+        if (!x) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+  }
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
@@ -124,4 +137,77 @@ export function contactShadow() {
   shadow.rotation.x = -Math.PI / 2;
   shadow.position.y = 0.12;
   return shadow;
+}
+
+// Short tapered hairs follow the actual ellipsoid surface, including its silhouette.
+// One geometry per animal keeps the coat affordable and free of transparent layers.
+export function furCoat(patches, color) {
+  const positions = [],
+    colors = [];
+  const base = new THREE.Color(color);
+  let seed = 418;
+  const random = () =>
+    (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
+  const normal = new THREE.Vector3(),
+    tangent = new THREE.Vector3();
+  for (const [cx, cy, cz, sx, sy, sz, count] of patches) {
+    for (let i = 0; i < count; i++) {
+      const y = random() * 2 - 1,
+        angle = random() * Math.PI * 2;
+      const radius = Math.sqrt(1 - y * y);
+      const x = radius * Math.cos(angle),
+        z = radius * Math.sin(angle);
+      normal.set(x / sx, y / sy, z / sz).normalize();
+      tangent.set(normal.z, 0, -normal.x).normalize();
+      const p = new THREE.Vector3(cx + x * sx, cy + y * sy, cz + z * sz);
+      const width = 0.003 + random() * 0.003;
+      const length = 0.025 + random() * 0.045;
+      const tip = p.clone().addScaledVector(normal, length);
+      tip.y -= length * 0.23;
+      const a = p.clone().addScaledVector(tangent, width);
+      const b = p.clone().addScaledVector(tangent, -width);
+      positions.push(...a.toArray(), ...b.toArray(), ...tip.toArray());
+      const shade = 0.55 + random() * 0.65;
+      const c = base.clone().multiplyScalar(shade);
+      for (let v = 0; v < 3; v++) colors.push(c.r, c.g, c.b);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute(
+    "position",
+    new THREE.Float32BufferAttribute(positions, 3),
+  );
+  geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+  geometry.computeVertexNormals();
+  return new THREE.Mesh(
+    geometry,
+    new THREE.MeshStandardMaterial({
+      vertexColors: true,
+      roughness: 0.95,
+      side: THREE.DoubleSide,
+    }),
+  );
+}
+
+export function shavingGeometry() {
+  const points = [],
+    indices = [];
+  for (let i = 0; i <= 6; i++) {
+    const t = i / 6;
+    const height = Math.sin(t * Math.PI * 1.35) * 0.26;
+    const width = 0.5 * (0.65 + Math.sin(t * Math.PI) * 0.35);
+    points.push(t - 0.5, height, -width, t - 0.5, height + 0.025, width);
+    if (i < 6) {
+      const a = i * 2;
+      indices.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute(
+    "position",
+    new THREE.Float32BufferAttribute(points, 3),
+  );
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
 }

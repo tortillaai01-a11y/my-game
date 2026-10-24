@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import "./style.css";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { Tunnels } from "./tunnels.js";
@@ -17,6 +18,8 @@ import { MovementInput } from "./controls.js";
 import { resolvePenetration } from "./collision.js";
 import {
   surfaceTexture,
+  furCoat,
+  shavingGeometry,
   furMaterial,
   batchStatic,
   contactShadow,
@@ -73,6 +76,7 @@ $("quality").onclick = () => {
       : Math.min(devicePixelRatio, qualityMode === "high" ? 2 : 1.5);
   renderer.setPixelRatio(resolutionScale);
   updateQualityLabel();
+  renderer.shadowMap.needsUpdate = true;
   try {
     localStorage.setItem("hamster-graphics", qualityMode);
   } catch {}
@@ -85,7 +89,14 @@ renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.shadowMap.autoUpdate = false;
 renderer.shadowMap.needsUpdate = true;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.02;
+renderer.toneMappingExposure = 0.94;
+const environmentGenerator = new THREE.PMREMGenerator(renderer);
+const environmentRoom = new RoomEnvironment();
+const environmentMap = environmentGenerator.fromScene(environmentRoom, 0.04);
+scene.environment = environmentMap.texture;
+scene.environmentIntensity = 0.38;
+environmentRoom.dispose();
+environmentGenerator.dispose();
 document.querySelector("#app").prepend(renderer.domElement);
 const camera = new THREE.PerspectiveCamera(
   52,
@@ -93,9 +104,9 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   90,
 );
-scene.add(new THREE.HemisphereLight("#e9f2ff", "#998464", 1.65));
-const sun = new THREE.DirectionalLight("#ffe9c7", 2.8);
-sun.position.set(-8, 22, 9);
+scene.add(new THREE.HemisphereLight("#e9f2ff", "#655340", 0.85));
+const sun = new THREE.DirectionalLight("#fff0db", 3.2);
+sun.position.set(-12, 19, -8);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 Object.assign(sun.shadow.camera, {
@@ -123,7 +134,7 @@ const M = {
   green: material("#91aa93"),
   wood: material("#c89e72"),
   roof: material("#8fa7a0"),
-  metal: material("#bac5b6", 0.5, 0.4),
+  metal: material("#c4c9cd", 0.25, 0.88),
   water: material("#95c5c9", 0.25),
   food: material("#a98a50"),
 };
@@ -135,6 +146,15 @@ M.bedding.map = surfaceTexture("bedding");
 M.bedding.color.set("#fff5d9");
 M.bedding.bumpMap = M.bedding.map;
 M.bedding.bumpScale = 0.05;
+M.dark = new THREE.MeshPhysicalMaterial({
+  color: "#100e0c",
+  roughness: 0.08,
+  clearcoat: 1,
+  clearcoatRoughness: 0.03,
+});
+M.pink.roughness = 0.52;
+M.chip.side = THREE.DoubleSide;
+M.chip.map = surfaceTexture("wood");
 M.water = new THREE.MeshPhysicalMaterial({
   color: "#8cc6cf",
   roughness: 0.15,
@@ -222,13 +242,9 @@ function rand() {
   seed = (seed * 1664525 + 1013904223) >>> 0;
   return seed / 4294967296;
 }
-const chips = new THREE.InstancedMesh(
-    new THREE.BoxGeometry(1, 1, 1),
-    M.chip,
-    1900,
-  ),
+const chips = new THREE.InstancedMesh(shavingGeometry(), M.chip, 3800),
   dummy = new THREE.Object3D();
-for (let i = 0; i < 1900; i++) {
+for (let i = 0; i < 3800; i++) {
   dummy.position.set(
     (rand() - 0.5) * 24.7,
     0.05 + rand() * 0.06,
@@ -237,7 +253,7 @@ for (let i = 0; i < 1900; i++) {
   dummy.rotation.set(rand() * 0.25, rand() * 6.28, rand() * 0.3);
   dummy.scale.set(
     0.13 + rand() * 0.5,
-    0.04 + rand() * 0.04,
+    0.16 + rand() * 0.18,
     0.06 + rand() * 0.2,
   );
   dummy.updateMatrix();
@@ -486,13 +502,39 @@ function hamster(fur) {
       }),
     ),
   );
+  const outerCoat = furCoat(
+    [
+      [0, 0.65, 0, 0.55, 0.59, 0.7, 10000],
+      [0, 1.17, 0.28, 0.57, 0.48, 0.49, 8500],
+      [-0.4, 1.55, 0.24, 0.2, 0.24, 0.13, 800],
+      [0.4, 1.55, 0.24, 0.2, 0.24, 0.13, 800],
+    ],
+    fur.color,
+  );
+  const coat = new THREE.Group();
+  coat.add(
+    outerCoat,
+    furCoat(
+      [
+        [0, 0.65, 0.58, 0.42, 0.39, 0.19, 3000],
+        [-0.3, 1.02, 0.68, 0.21, 0.18, 0.13, 1300],
+        [0.3, 1.02, 0.68, 0.21, 0.18, 0.13, 1300],
+      ],
+      M.cream.color,
+    ),
+  );
+  body.add(coat);
+  for (const foot of feet) {
+    for (let toe = -1; toe <= 1; toe++)
+      ball(toe * 0.22, -0.12, 0.65, 0.15, 0.25, 0.35, M.pink, foot);
+  }
   const shadow = contactShadow();
   scene.add(shadow);
-  batchStatic(body, new Set(feet));
+  batchStatic(body, new Set([...feet, coat]));
   body.traverse((o) => {
     if (o.isMesh) o.castShadow = false;
   });
-  return { root, body, feet, shadow };
+  return { root, body, feet, shadow, coat };
 }
 const player = hamster(M.fur),
   bot = hamster(M.pale);
@@ -1539,7 +1581,13 @@ function frame(now) {
     hud();
     hudAccumulator = 0;
   }
+  renderer.shadowMap.autoUpdate = qualityMode === "high" && !burrowing;
   for (const h of [player, bot]) {
+    h.coat.visible = qualityMode !== "fast";
+    h.body.traverse((o) => {
+      if (o.isMesh && o.parent !== h.coat)
+        o.castShadow = qualityMode === "high" && !burrowing;
+    });
     const p = h.root.position,
       ground = surface(p.x, p.z, p.y);
     h.shadow.visible = h !== player || !burrowing;
