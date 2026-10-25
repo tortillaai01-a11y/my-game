@@ -17,7 +17,7 @@ document.querySelector("#app").innerHTML = `
 <section class="needs"><div><label for="food">Сытость <b id="food-number">75%</b></label><progress id="food" max="100" value="75"></progress></div><div><label for="water">Запас воды <b id="water-number">75%</b></label><progress id="water" max="100" value="75"></progress></div></section><section class="cards"><div class="card"><span class="label">Сейчас у Хомы</span><strong class="value status" id="activity">Гуляет по клетке</strong><small id="thought">Столько всего интересного!</small></div><div class="card"><span class="label">Память Хомы</span><strong class="value" id="memory">Изучает клетку</strong><small id="stocks">Корм: 60 · вода: 70</small></div><div class="card"><span class="label">Время вместе</span><strong class="value time" id="time">00:00</strong><small>Никуда не спешим</small></div></section>
 <footer><span>При переносе Хома помнит своё намерение. Если припасы кончатся, он ищет крошки, ростки и капли воды.</span><a href="./index.html">Другие игры ↗</a></footer></main>
 <dialog id="memory-menu" aria-labelledby="memory-title"><div class="memory-heading"><h2 id="memory-title">Память Хомы</h2><button id="close-memory" aria-label="Закрыть меню памяти">×</button></div>
-<p>Запиши, где есть или нет еды и воды. Подсказки могут быть ложными: Хома поверит им, но после проверки исправит запись. Реальные запасы от подсказок не меняются.</p>
+<p>Хома сам исследует клетку и записывает наблюдения. Здесь ты можешь исправить его записи или добавить подсказку. Подсказки могут быть ложными: Хома поверит им, но после проверки исправит запись. Реальные запасы от подсказок не меняются.</p>
 <form id="memory-form">
 <label>Что искать<select id="memory-kind"><option value="food">Еду</option><option value="water">Воду</option></select></label>
 <label>Место<select id="memory-place"></select></label>
@@ -487,7 +487,8 @@ function renderMemories() {
   document.querySelector("#forget-all").disabled = !entries.length;
   if (!entries.length) {
     const empty = document.createElement("p");
-    empty.textContent = "Пока нет записей. Добавь первую подсказку.";
+    empty.textContent =
+      "Пока нет записей. Закрой меню: Хома сам изучит клетку и начнёт запоминать места.";
     list.append(empty);
   }
   for (const [id, m] of entries) {
@@ -505,7 +506,7 @@ function renderMemories() {
       (site.kind === "food" ? "еда" : "вода") +
       (present ? " есть" : " отсутствует");
     detail.textContent =
-      (m.injected ? "Твоя подсказка" : "Проверено Хомой") +
+      (m.injected ? "Твоя подсказка" : "Сам узнал") +
       " · В клетке сейчас: " +
       (site.stock >= 1 ? "есть" : "нет");
     description.append(title, detail);
@@ -519,7 +520,25 @@ function renderMemories() {
       fillPlaces();
       draw();
     };
-    row.append(description, remove);
+    const edit = document.createElement("button");
+    edit.className = "quiet";
+    edit.textContent = "Изменить";
+    edit.setAttribute("aria-label", "Изменить воспоминание: " + site.name);
+    edit.onclick = () => {
+      kindInput.value = site.kind;
+      fillPlaces();
+      placeInput.value = id;
+      beliefInput.value = present ? "yes" : "no";
+      previewMemory();
+      document
+        .querySelector("#memory-form")
+        .scrollIntoView({ block: "nearest" });
+      beliefInput.focus();
+    };
+    const actions = document.createElement("div");
+    actions.className = "memory-actions";
+    actions.append(edit, remove);
+    row.append(description, actions);
     list.append(row);
   }
   document.querySelector("#memory").textContent = "Записей: " + entries.length;

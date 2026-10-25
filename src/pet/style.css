@@ -420,3 +420,9 @@ progress.low::-moz-progress-bar {
     padding: 17px;
   }
 }
+.memory-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}

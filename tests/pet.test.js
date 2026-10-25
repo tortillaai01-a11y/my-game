@@ -149,3 +149,40 @@ test("a false absence makes the hamster avoid a full bowl; deleting it restores 
   updatePet(p, 0.1);
   assert.equal(p.source, "main-food");
 });
+
+test("without player hints a well-fed hamster autonomously maps the cage", () => {
+  const p = createPet();
+  for (let i = 0; i < 1800; i++) {
+    p.food = 90;
+    p.water = 90;
+    p.energy = 90;
+    updatePet(p, 0.1, () => 0.4);
+  }
+  for (const id of [
+    "crumbs",
+    "sprouts",
+    "drops",
+    "dew",
+    "main-food",
+    "main-water",
+  ])
+    assert.ok(p.memory[id], id + " should be learned autonomously");
+  assert.ok(Object.values(p.memory).every((m) => !m.injected));
+});
+test("a forgotten real location is learned again during exploration", () => {
+  const p = createPet();
+  for (let i = 0; i < 300; i++) {
+    p.food = 90;
+    p.water = 90;
+    updatePet(p, 0.1, () => 0.4);
+  }
+  forgetMemory(p, "sprouts");
+  for (let i = 0; i < 1000; i++) {
+    p.food = 90;
+    p.water = 90;
+    p.energy = 90;
+    updatePet(p, 0.1, () => 0.4);
+  }
+  assert.ok(p.memory.sprouts);
+  assert.equal(p.memory.sprouts.injected, undefined);
+});

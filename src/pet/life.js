@@ -9,6 +9,7 @@ export const ACTIVITIES = {
   held: "У тебя в руках",
   fall: "Спускается на опилки",
   search: "Ищет припасы",
+  observe: "Изучает клетку",
 };
 const places = { eat: 640, drink: 787, wheel: 420, sleep: 185 };
 const clamp = (n, min = 0, max = 100) => Math.max(min, Math.min(max, n));
@@ -16,10 +17,10 @@ export function createPet() {
   return {
     x: 300,
     y: 398,
-    target: 520,
+    target: 550,
     facing: 1,
     activity: "walk",
-    next: "sniff",
+    next: "observe",
     timer: 0,
     age: 0,
     visits: 0,
@@ -32,7 +33,9 @@ export function createPet() {
     velocity: 0,
     floor: 398,
     goal: null,
-    source: null,
+    source: "drops",
+    nextExploreAt: 0,
+    observing: null,
     resume: null,
     supplies: { food: 60, water: 70 },
     memory: {},
@@ -217,6 +220,51 @@ function remember(p, site, found) {
     time: p.age,
   };
 }
+function explore(p) {
+  if (p.age < p.nextExploreAt) return false;
+  const sites = memoryPlaces(p).filter(
+    (s) => !p.memory[s.id] || p.age - p.memory[s.id].time > 40,
+  );
+  sites.sort((a, b) => {
+    const score = (s) =>
+      (p.memory[s.id] ? 0 : 1000) +
+      (p.age - (p.memory[s.id]?.time ?? p.age)) -
+      Math.abs(p.x - s.x);
+    return score(b) - score(a);
+  });
+  const site = sites[0];
+  if (!site) return false;
+  p.goal = null;
+  p.source = site.id;
+  p.target = site.x;
+  p.next = "observe";
+  p.activity = "walk";
+  p.reason =
+    (p.memory[site.id] ? "Проверю, что изменилось: " : "Хочу изучить: ") +
+    site.name +
+    ".";
+  return true;
+}
+function observeNearby(p, dt) {
+  const site = memoryPlaces(p)
+    .filter((s) => Math.abs(s.x - p.x) < 32)
+    .sort((a, b) => Math.abs(a.x - p.x) - Math.abs(b.x - p.x))[0];
+  if (!site) {
+    p.observing = null;
+    return;
+  }
+  const m = p.memory[site.id];
+  if (m && !m.injected && p.age - m.time < 20) {
+    p.observing = null;
+    return;
+  }
+  if (p.observing?.id !== site.id) p.observing = { id: site.id, time: 0 };
+  p.observing.time += dt;
+  if (p.observing.time >= 1.2) {
+    remember(p, site, site.stock >= 1);
+    p.observing = null;
+  }
+}
 export function holdPet(p, x, y) {
   if (!p.held && !p.falling)
     p.resume = {
@@ -248,7 +296,11 @@ function resumePet(p) {
     return;
   }
   Object.assign(p, saved);
-  if (["eat", "drink", "search", "sleep", "wheel"].includes(saved.activity)) {
+  if (
+    ["eat", "drink", "search", "observe", "sleep", "wheel"].includes(
+      saved.activity,
+    )
+  ) {
     p.next = saved.activity;
     p.activity = "walk";
   }
@@ -292,6 +344,7 @@ export function updatePet(p, dt, random = Math.random) {
         : p.water < 40
           ? "drink"
           : null;
+  observeNearby(p, dt);
   // An active need remains the goal until satisfied, including while carried.
   if (urgent && !p.goal) seek(p, urgent);
   if (p.activity === "walk") {
@@ -305,13 +358,32 @@ export function updatePet(p, dt, random = Math.random) {
       p.timer =
         p.next === "sleep"
           ? 14
-          : p.next === "search"
-            ? Math.max(1, 3 - p.discoveries * 0.35)
-            : 4 + random() * 5;
+          : p.next === "observe"
+            ? 1.5
+            : p.next === "search"
+              ? Math.max(1, 3 - p.discoveries * 0.35)
+              : 4 + random() * 5;
       p.visits++;
     } else p.x += Math.sign(d) * dt * 43;
   } else {
     p.timer -= dt;
+    if (p.activity === "observe" && p.timer <= 0) {
+      const site = memoryPlaces(p).find((s) => s.id === p.source);
+      if (site) {
+        remember(p, site, site.stock >= 1);
+        p.reason =
+          "Сам проверил: " +
+          site.name +
+          (site.stock >= 1
+            ? " — есть припасы. Запомню!"
+            : " — пусто. Запомню!");
+      }
+      p.source = null;
+      p.activity = "sniff";
+      p.timer = 2;
+      p.nextExploreAt = p.age + 6;
+      return p;
+    }
     if (p.activity === "search" && p.timer <= 0) {
       const site = memoryPlaces(p).find((s) => s.id === p.source);
       if (site) {
@@ -374,6 +446,7 @@ export function updatePet(p, dt, random = Math.random) {
       else if (p.food < 65) seek(p, "eat");
       else if (p.energy < 35)
         choose(p, "sleep", "Устал. В домике уютно и тихо.", random);
+      else if (explore(p)) return p;
       else {
         const options = ["sniff", "groom", "wheel", "sleep"].filter(
             (a) => a !== p.activity,

@@ -122,3 +122,30 @@ test("memory menu adds true and false hints and deletes individual or all memori
   ).toBeLessThanOrEqual(390);
   await page.screenshot({ path: "/tmp/pet-memory-mobile.png" });
 });
+test("hamster writes its own memory without editing and the player can change it", async ({
+  page,
+}) => {
+  await page.goto("/my-game/pet.html");
+  await page.waitForFunction(
+    () =>
+      window.petState &&
+      petState().memory.drops &&
+      !petState().memory.drops.injected,
+    null,
+    { timeout: 15000 },
+  );
+  await page.locator("#open-memory").click();
+  await expect(page.locator("#memory-list")).toContainText("Сам узнал");
+  await page
+    .getByRole("button", { name: "Изменить воспоминание: капли у стенки" })
+    .click();
+  await expect(page.locator("#memory-place")).toHaveValue("drops");
+  await page.locator("#memory-belief").selectOption("no");
+  await page.getByRole("button", { name: "Записать воспоминание" }).click();
+  expect((await page.evaluate(() => petState())).memory.drops.injected).toBe(
+    true,
+  );
+  expect((await page.evaluate(() => petState())).memory.drops.present).toBe(
+    false,
+  );
+});
