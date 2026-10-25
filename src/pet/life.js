@@ -201,7 +201,7 @@ function reconsider(p, id) {
 export function forgetMemory(p, id) {
   delete p.memory[id];
   const site = p.sites.find((s) => s.id === id);
-  if (site?.custom) p.sites = p.sites.filter((s) => s.id !== id);
+  if (site?.custom) p.sites.splice(p.sites.indexOf(site), 1);
   reconsider(p, id);
   p.discoveries = Object.values(p.memory).filter((m) => m.finds > 0).length;
 }
@@ -401,11 +401,12 @@ export function releasePet(p) {
   if (p.falling) p.activity = "fall";
   else resumePet(p);
 }
-export function updatePet(p, dt, random = Math.random) {
+export function updatePet(p, dt, random = Math.random, regenerate = true) {
   dt = clamp(dt, 0, 0.1);
   p.age += dt;
-  for (const s of p.sites)
-    s.stock = clamp(s.stock + s.regen * dt, 0, s.capacity);
+  if (regenerate)
+    for (const s of p.sites)
+      s.stock = clamp(s.stock + s.regen * dt, 0, s.capacity);
   if (p.held) return p;
   if (p.falling) {
     p.velocity += dt * 460;
@@ -851,7 +852,8 @@ export function addWall(p, x, upper) {
   return true;
 }
 export function removeWall(p, id) {
-  p.walls = p.walls.filter((w) => w.id !== id);
+  const index = p.walls.findIndex((w) => w.id === id);
+  if (index >= 0) p.walls.splice(index, 1);
 }
 
 function learnSkill(p, key, dt, seconds, reason) {

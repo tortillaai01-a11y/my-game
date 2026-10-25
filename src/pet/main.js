@@ -1,6 +1,6 @@
 import "./style.css";
+import { setHamsterCount, updateColony } from "./colony.js";
 import {
-  createPet,
   SKILLS,
   addWall,
   removeWall,
@@ -9,7 +9,6 @@ import {
   setSupply,
   setWaterSupply,
   UPPER_FLOOR,
-  updatePet,
   ACTIVITIES,
   holdPet,
   moveHeldPet,
@@ -21,8 +20,8 @@ import {
 document.querySelector("#app").innerHTML = `
 <main class="shell"><header><div class="brand"><div class="logo">🐹</div><div><h1>Хома дома</h1><div class="tag">МАЛЕНЬКАЯ ЖИЗНЬ РЯДОМ</div></div></div><div class="header-actions"><button class="quiet" id="restart">Начать заново</button><button class="quiet" id="open-memory">Память</button><button class="quiet" id="pause">Ⅱ Пауза</button></div></header>
 <section class="intro"><div><div class="eyebrow">ЗНАКОМЬСЯ, ЭТО ХОМА</div><h2>У него свои маленькие дела.</h2><p>Хома только родился и постепенно учится жить в клетке. Возьми Хому мышью или пальцем и перенеси внутри клетки.</p></div><div class="live"><span class="dot"></span><span id="live">Жизнь идёт</span></div></section>
-<div class="habitat"><canvas id="cage" width="900" height="690" role="img" aria-label="Двумерная клетка: Хома самостоятельно гуляет, ест, пьёт, бегает в колесе и отдыхает."></canvas><div class="paused" id="overlay" hidden><span>Тихая пауза ☁</span></div></div>
-<section class="water-controls" aria-label="Запасы воды"><strong id="bottle-stock" aria-live="polite">В поилке: 70 / 70</strong><button class="quiet" id="refill-water">Пополнить воду</button><button class="quiet" id="empty-water">Опустошить поилку</button></section><details id="cage-editor"><summary>⚒ Изменить клетку</summary><p>Выбери предмет и нажми в клетке, чтобы переставить его. Или выбери этаж и положение ниже. Пока редактируешь, Хома отдыхает.</p><div class="editor-fields"><label>Инструмент<select id="cage-tool"><option value="move">Переставить предмет</option><option value="wall">Поставить стену</option><option value="erase">Убрать стену</option></select></label><label>Предмет<select id="cage-item"></select></label><label>Этаж<select id="cage-floor"><option value="0">Первый</option><option value="1">Второй</option></select></label><label>Положение<input id="cage-x" type="range" min="150" max="780" value="300"></label></div><div class="water-controls"><button id="supply-fill" class="quiet">Пополнить запас</button><button id="supply-empty" class="quiet">Опустошить запас</button><button id="empty-all" class="quiet">Опустошить все запасы</button></div><p id="supply-status" role="status"></p><div class="water-controls"><button id="place-wall" class="quiet">Поставить стену здесь</button><button id="clear-walls" class="quiet">Убрать все стены</button></div><p id="wall-status" role="status">Стены перекрывают проход на выбранном этаже. Для установки или удаления выбери инструмент и нажми в клетке.</p><div id="wall-list"></div><small>Капли и ростки постепенно восстанавливаются. Расстановка действует до перезагрузки страницы.</small></details><section class="needs"><div><label for="food">Сытость <b id="food-number">75%</b></label><progress id="food" max="100" value="75"></progress></div><div><label for="water">Запас воды <b id="water-number">75%</b></label><progress id="water" max="100" value="75"></progress></div></section><section class="development"><strong>Чему учится Хома</strong><p>Он начинает без навыков: сначала учится ходить и исследовать, затем — всему остальному на практике. Копать сразу не умеет.</p><div id="skills"></div></section><section class="cards"><div class="card"><span class="label">Сейчас у Хомы</span><strong class="value status" id="activity">Гуляет по клетке</strong><small id="thought">Столько всего интересного!</small></div><div class="card"><span class="label">Память Хомы</span><strong class="value" id="memory">Изучает клетку</strong><small id="stocks">Корм: 60 · вода: 70</small></div><div class="card"><span class="label">Время вместе</span><strong class="value time" id="time">00:00</strong><small>Никуда не спешим</small></div></section>
+<section class="population"><label>Хомяков в клетке<select id="hamster-count"><option value="1">1 хомяк</option><option value="2">2 хомяка</option><option value="3">3 хомяка</option></select></label><label>Чьи потребности и память<select id="selected-hamster"></select></label><small>Новые хомяки начинают без навыков. При уменьшении количества убираются последние добавленные.</small></section><div class="habitat"><canvas id="cage" width="900" height="690" role="img" aria-label="Двумерная клетка: Хома самостоятельно гуляет, ест, пьёт, бегает в колесе и отдыхает."></canvas><div class="paused" id="overlay" hidden><span>Тихая пауза ☁</span></div></div>
+<section class="water-controls" aria-label="Запасы воды"><strong id="bottle-stock" aria-live="polite">В поилке: 70 / 70</strong><button class="quiet" id="refill-water">Пополнить воду</button><button class="quiet" id="empty-water">Опустошить поилку</button></section><details id="cage-editor"><summary>⚒ Изменить клетку</summary><p>Выбери предмет и нажми в клетке, чтобы переставить его. Или выбери этаж и положение ниже. Пока редактируешь, Хома отдыхает.</p><div class="editor-fields"><label>Инструмент<select id="cage-tool"><option value="move">Переставить предмет</option><option value="wall">Поставить стену</option><option value="erase">Убрать стену</option></select></label><label>Предмет<select id="cage-item"></select></label><label>Этаж<select id="cage-floor"><option value="0">Первый</option><option value="1">Второй</option></select></label><label>Положение<input id="cage-x" type="range" min="150" max="780" value="300"></label></div><div class="water-controls"><button id="supply-fill" class="quiet">Пополнить запас</button><button id="supply-empty" class="quiet">Опустошить запас</button><button id="empty-all" class="quiet">Опустошить все запасы</button></div><p id="supply-status" role="status"></p><div class="water-controls"><button id="place-wall" class="quiet">Поставить стену здесь</button><button id="clear-walls" class="quiet">Убрать все стены</button></div><p id="wall-status" role="status">Стены перекрывают проход на выбранном этаже. Для установки или удаления выбери инструмент и нажми в клетке.</p><div id="wall-list"></div><small>Капли и ростки постепенно восстанавливаются. Расстановка действует до перезагрузки страницы.</small></details><section class="needs"><div><label for="food">Сытость <b id="food-number">75%</b></label><progress id="food" max="100" value="75"></progress></div><div><label for="water">Запас воды <b id="water-number">75%</b></label><progress id="water" max="100" value="75"></progress></div></section><section class="development"><strong id="development-title">Чему учится Хома</strong><p>Он начинает без навыков: сначала учится ходить и исследовать, затем — всему остальному на практике. Копать сразу не умеет.</p><div id="skills"></div></section><section class="cards"><div class="card"><span class="label" id="current-title">Сейчас у Хомы</span><strong class="value status" id="activity">Гуляет по клетке</strong><small id="thought">Столько всего интересного!</small></div><div class="card"><span class="label" id="memory-card-title">Память Хомы</span><strong class="value" id="memory">Изучает клетку</strong><small id="stocks">Корм: 60 · вода: 70</small></div><div class="card"><span class="label">Время вместе</span><strong class="value time" id="time">00:00</strong><small>Никуда не спешим</small></div></section>
 <footer><span>При переносе Хома помнит своё намерение. Если припасы кончатся, он ищет крошки, ростки и капли воды. Если еду не найти или путь к ней закрыт, зарывается за червячками.</span><a href="./index.html">Другие игры ↗</a></footer></main>
 <dialog id="memory-menu" aria-labelledby="memory-title"><div class="memory-heading"><h2 id="memory-title">Память Хомы</h2><button id="close-memory" aria-label="Закрыть меню памяти">×</button></div>
 <p>Хома сам исследует клетку и записывает наблюдения. Здесь ты можешь исправить его записи или добавить подсказку. Подсказки могут быть ложными: Хома поверит им, но после проверки исправит запись. Реальные запасы от подсказок не меняются.</p>
@@ -34,8 +33,10 @@ document.querySelector("#app").innerHTML = `
 <p id="memory-truth" role="status"></p><button class="quiet" type="submit">Записать воспоминание</button></form>
 <div class="memory-heading"><h3>Воспоминания</h3><button id="forget-all" class="quiet">Удалить все</button></div><div id="memory-list"></div><p>Пока меню открыто, жизнь на паузе. Память действует до перезагрузки страницы.</p></dialog>`;
 const canvas = document.querySelector("#cage"),
-  ctx = canvas.getContext("2d"),
-  pet = createPet();
+  ctx = canvas.getContext("2d");
+const hamsters = [];
+setHamsterCount(hamsters, 1);
+let pet = hamsters[0];
 let paused = false,
   previous = performance.now(),
   lastActivity = "",
@@ -192,7 +193,8 @@ function wheel() {
   ellipse(420, 300, 69, 78, "#e7ddc4");
   ctx.save();
   ctx.translate(420, 300);
-  ctx.rotate(pet.activity === "wheel" ? pet.age * 2.7 : 0);
+  const runner = hamsters.find((h) => h.activity === "wheel");
+  ctx.rotate(runner ? runner.age * 2.7 : 0);
   for (let i = 0; i < 18; i++) {
     const a = (i * Math.PI * 2) / 18;
     line(
@@ -241,7 +243,8 @@ function bowls() {
   for (const y of [196, 257]) line(736, y, 788, y, "#a8b8aa", 4);
   ctx.restore();
 }
-function hamster(x, y, facing = pet.facing) {
+function hamster(x, y, facing, subject = pet) {
+  const pet = subject;
   const activity = pet.activity,
     sleep = activity === "sleep",
     moving = activity === "walk" || activity === "wheel";
@@ -264,8 +267,8 @@ function hamster(x, y, facing = pet.facing) {
       ellipse(side * 14, step, 8, 4, "#c79c80");
     }
     const fur = ctx.createRadialGradient(4, -28, 2, -8, -15, 35);
-    fur.addColorStop(0, "#e2bc85");
-    fur.addColorStop(1, "#b98757");
+    fur.addColorStop(0, ["#e2bc85", "#d5d8dc", "#f5e9c9"][(pet.id ?? 1) - 1]);
+    fur.addColorStop(1, ["#b98757", "#9196a0", "#d1bc8b"][(pet.id ?? 1) - 1]);
     ellipse(-6, -22, 26, 24, fur);
     ellipse(11, -15, 17, 16, "#efdab5");
     ellipse(15, -33, 20, 19, fur);
@@ -391,20 +394,37 @@ function draw() {
         2,
       );
   }
-  const h = petPosition();
-  if (pet.activity === "dig") {
-    ellipse(pet.x, 409, 24, 8, "#735a46");
-    round(pet.x - 38, 407, 76, 37, 16, "#91734f");
-    line(
-      pet.x + 18,
-      432,
-      pet.x + 28,
-      427 + Math.sin(pet.age * 8) * 3,
-      "#e7b399",
-      4,
-    );
+  for (const member of hamsters) {
+    const h = petPosition(member);
+    const pet = member;
+    if (pet.activity === "dig") {
+      ellipse(pet.x, 409, 24, 8, "#735a46");
+      round(pet.x - 38, 407, 76, 37, 16, "#91734f");
+      line(
+        pet.x + 18,
+        432,
+        pet.x + 28,
+        427 + Math.sin(pet.age * 8) * 3,
+        "#e7b399",
+        4,
+      );
+    }
+    hamster(h.x, h.y - 180, pet.activity === "drink" ? -1 : pet.facing, member);
+    if (hamsters.length > 1) {
+      ctx.font = "bold 11px Arial";
+      ctx.textAlign = "center";
+      ctx.fillStyle =
+        member ===
+        hamsters.find(
+          (h) =>
+            h.id === Number(document.querySelector("#selected-hamster").value),
+        )
+          ? "#9c6333"
+          : "#52665e";
+      ctx.fillText(member.name, h.x, h.y - 245);
+      ctx.textAlign = "left";
+    }
   }
-  hamster(h.x, h.y - 180, pet.activity === "drink" ? -1 : pet.facing);
   if (document.querySelector("#cage-editor").open) {
     const selected = cageItems(pet).find(
       (i) => i.id === document.querySelector("#cage-item").value,
@@ -441,7 +461,7 @@ function frame(now) {
   const dt = Math.min((now - previous) / 1000, 0.1);
   previous = now;
   if (!paused) {
-    updatePet(pet, dt);
+    updateColony(hamsters, dt);
     hudTime += dt;
     draw();
   }
@@ -486,7 +506,8 @@ function frame(now) {
   }
 }
 let drag = null;
-function petPosition() {
+function petPosition(subject = pet) {
+  const pet = subject;
   if (!pet.held && !pet.falling && pet.activity === "wheel")
     return {
       x: pet.furniture.wheel.x,
@@ -519,7 +540,7 @@ canvas.addEventListener("pointerdown", (e) => {
       if (wall) removeWall(pet, wall.id);
       renderWalls();
     } else
-      moveCageItem(
+      moveFurniture(
         pet,
         document.querySelector("#cage-item").value,
         pos.x,
@@ -530,9 +551,14 @@ canvas.addEventListener("pointerdown", (e) => {
     return;
   }
   if (paused || drag || e.button > 0) return;
-  const p = point(e),
-    h = petPosition();
-  if (Math.abs(p.x - h.x) > 46 || p.y < h.y - 65 || p.y > h.y + 12) return;
+  const p = point(e);
+  const hit = [...hamsters].reverse().find((member) => {
+    const h = petPosition(member);
+    return Math.abs(p.x - h.x) <= 46 && p.y >= h.y - 65 && p.y <= h.y + 12;
+  });
+  if (!hit) return;
+  selectHamster(hit.id);
+  const h = petPosition(hit);
   e.preventDefault();
   drag = { id: e.pointerId, dx: h.x - p.x, dy: h.y - p.y };
   holdPet(pet, h.x, h.y);
@@ -545,13 +571,12 @@ canvas.addEventListener("pointerdown", (e) => {
   draw();
 });
 canvas.addEventListener("pointermove", (e) => {
-  const p = point(e),
-    h = petPosition();
-  canvas.style.cursor = drag
-    ? "grabbing"
-    : Math.abs(p.x - h.x) < 46 && p.y > h.y - 65 && p.y < h.y + 12
-      ? "grab"
-      : "default";
+  const p = point(e);
+  const hovering = hamsters.some((member) => {
+    const h = petPosition(member);
+    return Math.abs(p.x - h.x) < 46 && p.y > h.y - 65 && p.y < h.y + 12;
+  });
+  canvas.style.cursor = drag ? "grabbing" : hovering ? "grab" : "default";
   if (!drag || e.pointerId !== drag.id) return;
   moveHeldPet(pet, p.x + drag.dx, p.y + drag.dy);
   draw();
@@ -768,7 +793,7 @@ for (const input of [floorInput, positionInput])
       positionInput.max = floorInput.value === "1" ? 540 : 810;
       return;
     }
-    moveCageItem(
+    moveFurniture(
       pet,
       itemInput.value,
       Number(positionInput.value),
@@ -812,7 +837,10 @@ function renderWalls() {
   }
 }
 function placeWall(x, upper) {
-  const added = addWall(pet, x, upper);
+  const allowed = hamsters.every((member) =>
+    addWall({ ...member, walls: [...member.walls] }, x, upper),
+  );
+  const added = allowed && addWall(pet, x, upper);
   document.querySelector("#wall-status").textContent = added
     ? "Стена установлена. Хома не сможет пройти сквозь неё."
     : "Не получилось: слишком близко Хома или другая стена, либо уже стоят 16 стен.";
@@ -831,7 +859,7 @@ document.querySelector("#cage-tool").onchange = () => {
 document.querySelector("#place-wall").onclick = () =>
   placeWall(Number(positionInput.value), floorInput.value === "1");
 document.querySelector("#clear-walls").onclick = () => {
-  pet.walls = [];
+  pet.walls.length = 0;
   renderWalls();
   draw();
 };
@@ -841,6 +869,46 @@ for (const [key, name] of Object.entries(SKILLS)) {
   skill.textContent = name + ": пока не умеет";
   document.querySelector("#skills").append(skill);
 }
+function moveFurniture(_selected, id, x, upper) {
+  for (const member of hamsters) moveCageItem(member, id, x, upper);
+}
+function selectHamster(id) {
+  endDrag();
+  pet = hamsters.find((member) => member.id === Number(id)) ?? hamsters[0];
+  document.querySelector("#selected-hamster").value = String(pet.id);
+  document.querySelector("#memory-title").textContent = "Память: " + pet.name;
+  document.querySelector("#current-title").textContent = "Сейчас: " + pet.name;
+  document.querySelector("#memory-card-title").textContent =
+    "Память: " + pet.name;
+  document.querySelector("#development-title").textContent =
+    "Чему учится " + pet.name;
+  lastActivity = "";
+  hudTime = 1;
+  draw();
+}
+function refreshPopulation() {
+  const select = document.querySelector("#selected-hamster");
+  select.replaceChildren();
+  for (const member of hamsters) {
+    const option = document.createElement("option");
+    option.value = member.id;
+    option.textContent = member.name;
+    select.append(option);
+  }
+  select.value = String(pet.id);
+}
+document.querySelector("#hamster-count").onchange = (e) => {
+  endDrag();
+  setHamsterCount(hamsters, Number(e.target.value));
+  if (!hamsters.includes(pet)) pet = hamsters[0];
+  refreshPopulation();
+  selectHamster(pet.id);
+};
+document.querySelector("#selected-hamster").onchange = (e) =>
+  selectHamster(e.target.value);
+refreshPopulation();
 resize();
 requestAnimationFrame(frame);
 window.petState = () => structuredClone({ ...pet, paused });
+
+window.colonyState = () => structuredClone(hamsters);

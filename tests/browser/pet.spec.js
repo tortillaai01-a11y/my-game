@@ -264,3 +264,52 @@ test("restart resets learning, memory, supplies, walls and furniture", async ({
   expect(p.paused).toBe(false);
   await expect(page.locator("#cage-editor")).not.toHaveAttribute("open", "");
 });
+
+test("population selector adds three independent babies and preserves the original hamster", async ({
+  page,
+}) => {
+  await page.goto("/my-game/pet.html");
+  await page.locator("#pause").click();
+  const first = await page.evaluate(() => petState());
+  await page.locator("#hamster-count").selectOption("3");
+  expect((await page.evaluate(() => colonyState())).length).toBe(3);
+  await page.locator("#selected-hamster").selectOption("2");
+  await expect(page.locator("#development-title")).toContainText("Плюш");
+  await page.locator("#open-memory").click();
+  await page.locator("#memory-belief").selectOption("no");
+  await page.getByRole("button", { name: "Записать воспоминание" }).click();
+  await page.locator("#close-memory").click();
+  const all = await page.evaluate(() => colonyState());
+  expect(all[0].memory).toEqual({});
+  expect(all[1].memory["main-food"].present).toBe(false);
+  expect(all[2].memory).toEqual({});
+  await page.locator("#empty-water").click();
+  expect(
+    (await page.evaluate(() => colonyState())).every(
+      (p) => p.supplies.water === 0,
+    ),
+  ).toBe(true);
+  await page.screenshot({ path: "/tmp/pet-three.png", fullPage: true });
+  await page.locator("#hamster-count").selectOption("1");
+  expect((await page.evaluate(() => petState())).id).toBe(1);
+  expect((await page.evaluate(() => petState())).skills).toEqual(first.skills);
+  await page.locator("#hamster-count").selectOption("3");
+  await page.locator("#pause").click();
+  const canvas = page.locator("#cage");
+  await canvas.scrollIntoViewIfNeeded();
+  const b = await canvas.boundingBox(),
+    third = (await page.evaluate(() => colonyState()))[2];
+  await page.mouse.move(
+    b.x + (third.x * b.width) / 900,
+    b.y + ((third.y - 25) * b.height) / 690,
+  );
+  await page.mouse.down();
+  expect((await page.evaluate(() => petState())).id).toBe(3);
+  expect((await page.evaluate(() => colonyState()))[2].held).toBe(true);
+  expect((await page.evaluate(() => colonyState()))[0].held).toBe(false);
+  await page.mouse.up();
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(390);
+});
