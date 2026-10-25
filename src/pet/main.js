@@ -1,11 +1,18 @@
 import "./style.css";
-import { createPet, updatePet, ACTIVITIES } from "./life.js";
+import {
+  createPet,
+  updatePet,
+  ACTIVITIES,
+  holdPet,
+  moveHeldPet,
+  releasePet,
+} from "./life.js";
 document.querySelector("#app").innerHTML = `
 <main class="shell"><header><div class="brand"><div class="logo">🐹</div><div><h1>Хома дома</h1><div class="tag">МАЛЕНЬКАЯ ЖИЗНЬ РЯДОМ</div></div></div><button class="quiet" id="pause">Ⅱ Пауза</button></header>
-<section class="intro"><div><div class="eyebrow">ЗНАКОМЬСЯ, ЭТО ХОМА</div><h2>У него свои маленькие дела.</h2><p>Он сам выбирает, куда пойти. А ты можешь просто побыть рядом.</p></div><div class="live"><span class="dot"></span><span id="live">Жизнь идёт</span></div></section>
+<section class="intro"><div><div class="eyebrow">ЗНАКОМЬСЯ, ЭТО ХОМА</div><h2>У него свои маленькие дела.</h2><p>Он сам выбирает, куда пойти. Возьми Хому мышью или пальцем и перенеси внутри клетки.</p></div><div class="live"><span class="dot"></span><span id="live">Жизнь идёт</span></div></section>
 <div class="habitat"><canvas id="cage" width="900" height="510" role="img" aria-label="Двумерная клетка: Хома самостоятельно гуляет, ест, пьёт, бегает в колесе и отдыхает."></canvas><div class="paused" id="overlay" hidden><span>Тихая пауза ☁</span></div></div>
-<section class="cards"><div class="card"><span class="label">Сейчас у Хомы</span><strong class="value status" id="activity">Гуляет по клетке</strong><small id="thought">Столько всего интересного!</small></div><div class="card"><span class="label">Характер</span><strong class="value">Пока знакомимся</strong><small>История только начинается</small></div><div class="card"><span class="label">Время вместе</span><strong class="value time" id="time">00:00</strong><small>Никуда не спешим</small></div></section>
-<footer><span>Первая глава: наблюдаем. Забота и «мини-разум» появятся дальше.</span><a href="./index.html">Другие игры ↗</a></footer></main>`;
+<section class="needs"><div><label for="food">Сытость <b id="food-number">75%</b></label><progress id="food" max="100" value="75"></progress></div><div><label for="water">Запас воды <b id="water-number">75%</b></label><progress id="water" max="100" value="75"></progress></div></section><section class="cards"><div class="card"><span class="label">Сейчас у Хомы</span><strong class="value status" id="activity">Гуляет по клетке</strong><small id="thought">Столько всего интересного!</small></div><div class="card"><span class="label">Характер</span><strong class="value">Любопытный</strong><small>Сам следит за едой и водой</small></div><div class="card"><span class="label">Время вместе</span><strong class="value time" id="time">00:00</strong><small>Никуда не спешим</small></div></section>
+<footer><span>Хома выбирает занятия по своим потребностям. Перетаскивай его внутри клетки.</span><a href="./index.html">Другие игры ↗</a></footer></main>`;
 const canvas = document.querySelector("#cage"),
   ctx = canvas.getContext("2d"),
   pet = createPet();
@@ -13,16 +20,8 @@ let paused = false,
   previous = performance.now(),
   lastActivity = "",
   hudTime = 0;
-const thoughts = {
-  walk: "Столько всего интересного!",
-  sniff: "Тут пахнет чем-то знакомым.",
-  groom: "Усы должны быть в порядке.",
-  eat: "Нашёл самое вкусное зёрнышко.",
-  drink: "Маленький глоток — и дальше.",
-  wheel: "Большое путешествие на месте.",
-  sleep: "Тс-с… ему снится что-то хорошее.",
-};
 function setPause(value) {
+  if (value) endDrag();
   paused = value;
   document.querySelector("#pause").textContent = paused
     ? "▶ Продолжить"
@@ -272,10 +271,11 @@ function draw() {
   house();
   wheel();
   bowls();
-  if (pet.activity === "wheel") {
+  if (pet.held || pet.falling) hamster(pet.x, pet.y);
+  else if (pet.activity === "wheel") {
     hamster(420, 367, 1);
   } else if (pet.activity === "sleep") hamster(184, 382);
-  else hamster(pet.x, 398, pet.activity === "drink" ? -1 : pet.facing);
+  else hamster(pet.x, pet.y, pet.activity === "drink" ? -1 : pet.facing);
   // Transparent front and rounded enamel base.
   const pane = ctx.createLinearGradient(0, 405, 0, 448);
   pane.addColorStop(0, "#e6f0da09");
@@ -309,7 +309,16 @@ function frame(now) {
     hudTime = 0;
     lastActivity = pet.activity;
     document.querySelector("#activity").textContent = ACTIVITIES[pet.activity];
-    document.querySelector("#thought").textContent = thoughts[pet.activity];
+    document.querySelector("#thought").textContent = pet.reason;
+    for (const [key, value] of [
+      ["food", pet.food],
+      ["water", pet.water],
+    ]) {
+      document.querySelector("#" + key).value = value;
+      document.querySelector("#" + key).classList.toggle("low", value < 35);
+      document.querySelector("#" + key + "-number").textContent =
+        Math.round(value) + "%";
+    }
     const seconds = Math.floor(pet.age);
     document.querySelector("#time").textContent =
       String(Math.floor(seconds / 60)).padStart(2, "0") +
@@ -317,6 +326,61 @@ function frame(now) {
       String(seconds % 60).padStart(2, "0");
   }
 }
+let drag = null;
+function petPosition() {
+  if (!pet.held && !pet.falling && pet.activity === "wheel")
+    return { x: 420, y: 367 };
+  if (!pet.held && !pet.falling && pet.activity === "sleep")
+    return { x: 184, y: 382 };
+  return { x: pet.x, y: pet.y };
+}
+function point(e) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: ((e.clientX - rect.left) * 900) / rect.width,
+    y: ((e.clientY - rect.top) * 510) / rect.height,
+  };
+}
+canvas.addEventListener("pointerdown", (e) => {
+  if (paused || drag || e.button > 0) return;
+  const p = point(e),
+    h = petPosition();
+  if (Math.abs(p.x - h.x) > 46 || p.y < h.y - 65 || p.y > h.y + 12) return;
+  e.preventDefault();
+  drag = { id: e.pointerId, dx: h.x - p.x, dy: h.y - p.y };
+  holdPet(pet, h.x, h.y);
+  try {
+    canvas.setPointerCapture(e.pointerId);
+  } catch {
+    /* Pointer may already be cancelled by the browser. */
+  }
+  canvas.classList.add("holding");
+  draw();
+});
+canvas.addEventListener("pointermove", (e) => {
+  const p = point(e),
+    h = petPosition();
+  canvas.style.cursor = drag
+    ? "grabbing"
+    : Math.abs(p.x - h.x) < 46 && p.y > h.y - 65 && p.y < h.y + 12
+      ? "grab"
+      : "default";
+  if (!drag || e.pointerId !== drag.id) return;
+  moveHeldPet(pet, p.x + drag.dx, p.y + drag.dy);
+  draw();
+});
+function endDrag(e) {
+  if (!drag || (e && e.pointerId !== drag.id)) return;
+  const id = drag.id;
+  drag = null;
+  releasePet(pet);
+  canvas.classList.remove("holding");
+  if (canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id);
+  draw();
+}
+for (const name of ["pointerup", "pointercancel", "lostpointercapture"])
+  canvas.addEventListener(name, endDrag);
+window.addEventListener("blur", () => setPause(true));
 resize();
 requestAnimationFrame(frame);
 window.petState = () => ({ ...pet, paused });
