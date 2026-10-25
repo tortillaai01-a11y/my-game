@@ -1,0 +1,252 @@
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: #f5eee2;
+  color: #3d514b;
+  font-family: ui-rounded, "Trebuchet MS", Arial, sans-serif;
+  min-height: 100vh;
+  background-image: radial-gradient(#d5cbb855 0.8px, transparent 0.8px);
+  background-size: 12px 12px;
+}
+button,
+a {
+  font: inherit;
+}
+button {
+  cursor: pointer;
+}
+button:focus-visible,
+a:focus-visible {
+  outline: 3px solid #b77b47;
+  outline-offset: 5px;
+}
+.shell {
+  max-width: 1120px;
+  margin: auto;
+  padding: 36px 32px 25px;
+}
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.logo {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border-radius: 19px;
+  background: #f0dfc2;
+  font-size: 31px;
+}
+h1 {
+  font-size: 27px;
+  margin: 0;
+  letter-spacing: -1px;
+}
+.tag {
+  font-size: 11px;
+  letter-spacing: 2px;
+  margin-top: 5px;
+  color: #8b9384;
+}
+.quiet {
+  border: 1px solid #d8d6c8;
+  background: #fffaf0;
+  border-radius: 22px;
+  padding: 11px 20px;
+  color: #52665e;
+  font-weight: bold;
+  min-width: 130px;
+}
+.intro {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  margin: 40px 4px 20px;
+}
+.eyebrow {
+  font-size: 10px;
+  letter-spacing: 2.5px;
+  color: #9c8866;
+  font-weight: bold;
+}
+h2 {
+  font-size: clamp(24px, 4vw, 37px);
+  font-weight: normal;
+  letter-spacing: -1px;
+  margin: 9px 0;
+}
+.intro p {
+  font-size: 13px;
+  color: #8b9384;
+  line-height: 1.8;
+  margin: 0;
+}
+.live {
+  font-size: 11px;
+  color: #71816d;
+  background: #e6eadc;
+  padding: 9px 14px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+.dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #86a075;
+  margin-right: 7px;
+}
+.habitat {
+  position: relative;
+  background: #ede7d9;
+  border-radius: 30px;
+  overflow: hidden;
+  border: 1px solid #e1d6c2;
+  box-shadow: 0 18px 50px #9c89651b;
+}
+canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 900/510;
+}
+.paused {
+  position: absolute;
+  inset: 0;
+  background: #f5eee278;
+  display: grid;
+  place-items: center;
+  backdrop-filter: blur(2px);
+}
+.paused span {
+  background: #fffaf0;
+  padding: 16px 25px;
+  border-radius: 24px;
+  font-size: 17px;
+}
+.paused[hidden] {
+  display: none;
+}
+.cards {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1fr;
+  gap: 14px;
+  margin-top: 19px;
+}
+.card {
+  padding: 19px 23px;
+  background: #fffaf0;
+  border: 1px solid #e5dece;
+  border-radius: 20px;
+}
+.label {
+  font-size: 10px;
+  letter-spacing: 1.6px;
+  color: #9a9f8d;
+  text-transform: uppercase;
+}
+.value {
+  display: block;
+  font-size: 17px;
+  margin-top: 9px;
+  font-weight: bold;
+}
+.card small {
+  display: block;
+  font-size: 11px;
+  color: #8c9485;
+  margin-top: 6px;
+}
+.status {
+  color: #a17a49;
+}
+footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  font-size: 11px;
+  color: #939a8b;
+  margin-top: 26px;
+  line-height: 1.8;
+}
+footer a {
+  color: #6d8276;
+  text-decoration: none;
+}
+.time {
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 600px) {
+  .shell {
+    padding: 22px 13px;
+  }
+  .logo {
+    width: 42px;
+    height: 42px;
+    font-size: 26px;
+  }
+  h1 {
+    font-size: 22px;
+  }
+  .tag {
+    font-size: 8px;
+    letter-spacing: 1px;
+  }
+  .brand {
+    gap: 9px;
+  }
+  .quiet {
+    min-width: 90px;
+    padding: 10px 12px;
+    font-size: 12px;
+  }
+  .intro {
+    margin-top: 28px;
+  }
+  .intro p {
+    max-width: 240px;
+    font-size: 11px;
+  }
+  .live {
+    display: none;
+  }
+  .habitat {
+    border-radius: 20px;
+  }
+  .cards {
+    gap: 8px;
+    grid-template-columns: 1fr 1fr;
+  }
+  .card {
+    padding: 15px;
+  }
+  .card:first-child {
+    grid-column: span 2;
+  }
+  .value {
+    font-size: 15px;
+  }
+  footer {
+    flex-direction: column;
+    gap: 6px;
+  }
+  .eyebrow {
+    font-size: 9px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .paused {
+    backdrop-filter: none;
+  }
+}

@@ -8,6 +8,7 @@ export default defineConfig({
         main: "index.html",
         shooter: "shooter.html",
         rocket: "rocket.html",
+        pet: "pet.html",
       },
     },
   },
