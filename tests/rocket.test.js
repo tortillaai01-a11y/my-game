@@ -35,8 +35,8 @@ test("garage transfer preserves items and empties the backpack", () => {
 test("yard contains exactly cardboard, pipe and fasteners; purchases require money", () => {
   assert.deepEqual(YARD_TYPES, ["cardboard", "pipe", "bolt"]);
   assert.equal(buy(emptyCargo(), 5, "fuel"), null);
-  const result = buy(emptyCargo(), 60, "fuel");
-  assert.equal(result.money, 40);
+  const result = buy(emptyCargo(), 500, "fuel");
+  assert.equal(result.money, 100);
   assert.equal(result.cargo.fuel, 1);
 });
 test("assembly consumes ingredients once and launch outcomes preserve only reusable parts", () => {
@@ -49,10 +49,17 @@ test("assembly consumes ingredients once and launch outcomes preserve only reusa
   assert.equal(launch(built.rocket, 0), null);
   const basic = { hull: 0, engine: 0, tank: 0, control: 0 };
   assert.equal(launchChance(basic), 0.5);
-  assert.ok(Math.abs(launchChance({ ...basic, hull: 1, engine: 1 }) - 0.9) < 1e-9);
-  assert.deepEqual(launch(basic, 0.1), { success: true, rocket: {} });
+  assert.ok(
+    Math.abs(launchChance({ ...basic, hull: 1, engine: 1 }) - 0.9) < 1e-9,
+  );
+  assert.deepEqual(launch(basic, 0.1), {
+    success: true,
+    rocket: {},
+    reward: 1000,
+  });
   assert.deepEqual(launch(basic, 0.9), {
     success: false,
+    reward: 0,
     rocket: { hull: 0, control: 0 },
   });
 });

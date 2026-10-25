@@ -44,18 +44,21 @@ export function transfer(cargo, storage) {
 }
 
 export const YARD_TYPES = ["cardboard", "pipe", "bolt"];
+export const SHIFT_PAY = 500;
+export const LAUNCH_REWARD = 1000;
+// Approximate game prices for common household-scale components, not live quotations.
 export const PRICES = {
-  cardboard: 3,
-  pipe: 8,
-  bolt: 3,
-  scrap: 14,
-  wire: 6,
-  board: 5,
-  can: 12,
-  electronics: 25,
-  rubber: 8,
-  engine: 65,
-  fuel: 20,
+  cardboard: 25,
+  pipe: 250,
+  bolt: 15,
+  scrap: 100,
+  wire: 75,
+  board: 200,
+  can: 750,
+  electronics: 1500,
+  rubber: 300,
+  engine: 5000,
+  fuel: 400,
 };
 export const RECIPES = [
   {
@@ -137,5 +140,5 @@ export function launch(rocket, roll) {
   const remaining = success
     ? {}
     : { hull: rocket.hull, control: rocket.control };
-  return { success, rocket: remaining };
+  return { success, rocket: remaining, reward: success ? LAUNCH_REWARD : 0 };
 }

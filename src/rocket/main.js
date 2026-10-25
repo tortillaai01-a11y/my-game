@@ -6,6 +6,7 @@ import {
   TYPES,
   YARD_TYPES,
   PRICES,
+  SHIFT_PAY,
   RECIPES,
   buy,
   assemble,
@@ -665,9 +666,9 @@ function renderPanel() {
       ).join("");
   if (panelKind === "work")
     content =
-      '<h2>Сортировочный цех</h2><p>Помоги разобрать посылки: смена длится 15 секунд активной игры. Оплата — 60 ₽. Оставайся у рабочего стола до конца смены.</p><div id="work-progress"></div><button id="work-start" ' +
+      '<h2>Сортировочный цех</h2><p>Помоги разобрать посылки: смена длится 15 секунд активной игры. Оплата — 500 ₽. Оставайся у рабочего стола до конца смены.</p><div id="work-progress"></div><button id="work-start" ' +
       (workRemaining > 0 ? "disabled" : "") +
-      ">Начать смену · 60 ₽</button>";
+      ">Начать смену · 500 ₽</button>";
   if (panelKind === "build") {
     const chance = launchChance(rocket);
     content =
@@ -716,7 +717,7 @@ function renderPanel() {
       (chance
         ? "Шанс взлёта: " + Math.round(chance * 100) + "%"
         : "Установи все четыре узла для запуска.") +
-      '</b><br>При неудаче двигатель и топливный бак теряются; корпус и управление остаются. После успешного полёта можно собрать новую ракету.</p><button id="launch" ' +
+      '</b><br>При неудаче двигатель и топливный бак теряются; корпус и управление остаются. За успешный взлёт ты получишь 1000 ₽ и сможешь собрать новую ракету.</p><button id="launch" ' +
       (!chance || flight ? "disabled" : "") +
       ">На старт! 🚀</button><p>Успешных запусков: " +
       flights +
@@ -824,7 +825,7 @@ function rebuildRocket() {
   }
   rocketVisual = new THREE.Group();
   rocketVisual.position.set(15, 0.2, 5);
-  rocketVisual.scale.setScalar(.68);
+  rocketVisual.scale.setScalar(0.68);
   scene.add(rocketVisual);
   const shell = mat(
     rocket.hull === 1 ? "#b4c3c6" : "#b5986b",
@@ -872,8 +873,11 @@ function startLaunch() {
   // Commit the result before animation: reload cannot reroll or duplicate a rocket.
   flight = { time: 0, success: result.success };
   rocket = result.rocket;
-  if (result.success) flights++;
-  else failures++;
+  if (result.success) {
+    flights++;
+    money += result.reward;
+    updateInventory();
+  } else failures++;
   save();
   closePanel();
   camera.position.set(26, 1.65, 13);
@@ -888,8 +892,8 @@ function updateActivities(dt, elapsed) {
     workRemaining = Math.max(0, workRemaining - elapsed);
     updateWorkLabel();
     if (workRemaining === 0) {
-      money += 60;
-      notify("Смена завершена: +60 ₽");
+      money += SHIFT_PAY;
+      notify("Смена завершена: +500 ₽");
       updateInventory();
       save();
       renderPanel();
@@ -915,7 +919,7 @@ function updateActivities(dt, elapsed) {
       rebuildRocket();
       notify(
         success
-          ? "Ракета взлетела! Можно строить следующую."
+          ? "Ракета взлетела! Награда: +1000 ₽."
           : "Неудачный запуск. Замени двигатель и заправленный бак.",
       );
       save();
@@ -967,7 +971,7 @@ function frame(now) {
       $("place").textContent = place;
       $("place-note").textContent = {
         Магазин: "Все детали доступны у прилавка. Покупки попадают в рюкзак.",
-        Работа: "У стола можно отработать смену и получить 60 ₽.",
+        Работа: "У стола можно отработать смену и получить 500 ₽.",
         Дом: "Твоё начало. Дом — позади, космос — впереди.",
         Гараж: "Верстак у дальней стены. Здесь можно сложить находки.",
         Мусорка:

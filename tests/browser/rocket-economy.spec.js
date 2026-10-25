@@ -7,6 +7,10 @@ test("work pays, shop charges, garage builds and launch persists its outcome", a
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.addInitScript(() => {
+    crypto.getRandomValues = (array) => {
+      array.fill(0);
+      return array;
+    };
     const s = sessionStorage.getItem("economy-fixture");
     if (s) {
       localStorage.setItem("rocket-yard-v1", s);
@@ -41,7 +45,7 @@ test("work pays, shop charges, garage builds and launch persists its outcome", a
   await page.waitForFunction(() => rocketState().nearest?.station === "work");
   await page.keyboard.press("KeyE");
   await page.locator("#work-start").click();
-  await page.waitForFunction(() => rocketState().money === 60, null, {
+  await page.waitForFunction(() => rocketState().money === 500, null, {
     timeout: 25000,
   });
   await page.locator("#close-activity").click();
@@ -50,7 +54,7 @@ test("work pays, shop charges, garage builds and launch persists its outcome", a
   await page.waitForFunction(() => rocketState().nearest?.station === "shop");
   await page.keyboard.press("KeyE");
   await page.locator('[data-buy="fuel"]').click();
-  expect((await page.evaluate(() => rocketState())).money).toBe(40);
+  expect((await page.evaluate(() => rocketState())).money).toBe(100);
   expect((await page.evaluate(() => rocketState())).cargo.fuel).toBe(1);
   await page.locator("#close-activity").click();
   await page.keyboard.press("Escape");
@@ -77,14 +81,17 @@ test("work pays, shop charges, garage builds and launch persists its outcome", a
     () => rocketState().flights + rocketState().failures === 1,
   );
   const result = await page.evaluate(() => rocketState());
-  await page.waitForFunction(() => rocketState().flight === null, null, {timeout:30000});
-  await page.screenshot({path:"/tmp/rocket-launch.png"});
+  expect(result.money).toBe(1100);
+  await page.waitForFunction(() => rocketState().flight === null, null, {
+    timeout: 30000,
+  });
+  await page.screenshot({ path: "/tmp/rocket-launch.png" });
   await page.keyboard.press("Escape");
   await page.reload();
   await page.waitForFunction(() => window.rocketState);
   expect((await page.evaluate(() => rocketState())).rocket).toEqual(
     result.rocket,
   );
-  expect((await page.evaluate(() => rocketState())).money).toBe(40);
+  expect((await page.evaluate(() => rocketState())).money).toBe(1100);
   expect(errors).toEqual([]);
 });
