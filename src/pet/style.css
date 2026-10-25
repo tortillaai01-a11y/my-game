@@ -119,7 +119,7 @@ canvas {
   display: block;
   width: 100%;
   height: auto;
-  aspect-ratio: 900/510;
+  aspect-ratio: 900/690;
 }
 .paused {
   position: absolute;
@@ -437,4 +437,34 @@ progress.low::-moz-progress-bar {
 }
 .water-controls strong {
   margin-right: auto;
+}
+
+#cage-editor {
+  background: #fffaf0;
+  padding: 18px;
+  border-radius: 18px;
+  margin-top: 16px;
+}
+#cage-editor summary {
+  cursor: pointer;
+  font-weight: bold;
+}
+#cage-editor p,
+#cage-editor small {
+  font-size: 12px;
+  line-height: 1.6;
+}
+.editor-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.editor-fields label {
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+}
+.editor-fields select {
+  padding: 8px;
+  max-width: 100%;
 }

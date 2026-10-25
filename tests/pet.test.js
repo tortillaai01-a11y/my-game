@@ -2,6 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   createPet,
+  moveCageItem,
+  setSupply,
+  cageItems,
   setWaterSupply,
   updatePet,
   ACTIVITIES,
@@ -46,7 +49,7 @@ test("critical thirst interrupts sleep; both depleted needs recover without osci
   assert.ok(p.food > 40);
 });
 test("hungry hamster seeks food; tired satisfied hamster seeks sleep", () => {
-  const p = { ...createPet(), food: 10 };
+  const p = { ...createPet(), food: 25 };
   updatePet(p, 0.1);
   assert.equal(p.next, "eat");
   const tired = { ...createPet(), activity: "sniff", timer: 0, energy: 10 };
@@ -60,13 +63,13 @@ test("dragging clamps to cage, suspends eating, and resumes after landing", () =
   assert.equal(p.y, 167);
   updatePet(p, 0.1);
   assert.equal(p.food, 30);
-  moveHeldPet(p, 200, 220);
+  moveHeldPet(p, 200, 400);
   releasePet(p);
   assert.equal(p.falling, true);
   for (let i = 0; i < 20; i++) updatePet(p, 0.1);
   assert.equal(p.held, false);
   assert.equal(p.falling, false);
-  assert.equal(p.y, 398);
+  assert.equal(p.y, 578);
 });
 
 test("carrying preserves exact need values, destination and intention through landing", () => {
@@ -201,7 +204,7 @@ test("hamster explores upstairs via ramp and returns downstairs without teleport
     assert.ok(Math.hypot(p.x - x, p.y - y) <= 4.301);
     if (p.climbing && p.y < 390) climbed = true;
     if (p.memory["upstairs-seeds"]) learned = true;
-    if (learned && p.y === 398) returned = true;
+    if (learned && p.y === 578) returned = true;
   }
   assert.ok(climbed && learned && returned);
 });
@@ -212,7 +215,7 @@ test("dropping above the shelf lands upstairs and preserves needs", () => {
     water = p.water;
   releasePet(p);
   while (p.falling) updatePet(p, 0.1);
-  assert.equal(p.y, 175);
+  assert.equal(p.y, 245);
   assert.equal(p.level, 1);
   assert.equal(p.food, food);
   assert.equal(p.water, water);
@@ -229,4 +232,40 @@ test("bottle controls change actual stock without changing needs or memories", (
   assert.equal(p.supplies.water, 70);
   assert.equal(p.water, water);
   assert.deepEqual(p.memory, memory);
+});
+
+test("moving the active food source upstairs replans the path and consumption happens there", () => {
+  const p = createPet();
+  p.food = 30;
+  updatePet(p, 0.1);
+  assert.equal(p.source, "main-food");
+  moveCageItem(p, "eat", 300, true);
+  assert.equal(p.targetY, 245);
+  for (let i = 0; i < 650 && p.supplies.food === 60; i++) updatePet(p, 0.1);
+  assert.ok(p.supplies.food < 60);
+  assert.equal(p.y, 245);
+  assert.equal(p.x, 300);
+});
+test("every real reserve can be emptied and refilled", () => {
+  const p = createPet();
+  for (const item of cageItems(p)) setSupply(p, item.id, false);
+  assert.equal(p.supplies.food, 0);
+  assert.equal(p.supplies.water, 0);
+  assert.ok(p.sites.every((s) => s.stock === 0));
+  for (const item of cageItems(p)) setSupply(p, item.id, true);
+  assert.ok(p.sites.every((s) => s.stock === s.capacity));
+});
+test("starving hamster descends from upstairs, digs underground, eats worms and resurfaces", () => {
+  const p = { ...createPet(), x: 340, y: 245, level: 1, food: 10 };
+  for (const item of cageItems(p)) setSupply(p, item.id, false);
+  let underground = false;
+  for (let i = 0; i < 1000; i++) {
+    updatePet(p, 0.1, () => 0.4);
+    if (p.activity === "dig" && p.y > 600) underground = true;
+    if (p.wormsFound && p.y === 578) break;
+  }
+  assert.ok(underground);
+  assert.equal(p.wormsFound, 1);
+  assert.ok(p.food > 20);
+  assert.equal(p.y, 578);
 });

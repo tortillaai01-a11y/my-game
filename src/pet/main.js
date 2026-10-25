@@ -1,6 +1,9 @@
 import "./style.css";
 import {
   createPet,
+  cageItems,
+  moveCageItem,
+  setSupply,
   setWaterSupply,
   UPPER_FLOOR,
   updatePet,
@@ -15,9 +18,9 @@ import {
 document.querySelector("#app").innerHTML = `
 <main class="shell"><header><div class="brand"><div class="logo">🐹</div><div><h1>Хома дома</h1><div class="tag">МАЛЕНЬКАЯ ЖИЗНЬ РЯДОМ</div></div></div><div class="header-actions"><button class="quiet" id="open-memory">Память</button><button class="quiet" id="pause">Ⅱ Пауза</button></div></header>
 <section class="intro"><div><div class="eyebrow">ЗНАКОМЬСЯ, ЭТО ХОМА</div><h2>У него свои маленькие дела.</h2><p>Он сам выбирает, куда пойти. Хома сам поднимается на второй этаж по лесенке. Возьми Хому мышью или пальцем и перенеси внутри клетки.</p></div><div class="live"><span class="dot"></span><span id="live">Жизнь идёт</span></div></section>
-<div class="habitat"><canvas id="cage" width="900" height="510" role="img" aria-label="Двумерная клетка: Хома самостоятельно гуляет, ест, пьёт, бегает в колесе и отдыхает."></canvas><div class="paused" id="overlay" hidden><span>Тихая пауза ☁</span></div></div>
-<section class="water-controls" aria-label="Запасы воды"><strong id="bottle-stock" aria-live="polite">В поилке: 70 / 70</strong><button class="quiet" id="refill-water">Пополнить воду</button><button class="quiet" id="empty-water">Опустошить поилку</button></section><section class="needs"><div><label for="food">Сытость <b id="food-number">75%</b></label><progress id="food" max="100" value="75"></progress></div><div><label for="water">Запас воды <b id="water-number">75%</b></label><progress id="water" max="100" value="75"></progress></div></section><section class="cards"><div class="card"><span class="label">Сейчас у Хомы</span><strong class="value status" id="activity">Гуляет по клетке</strong><small id="thought">Столько всего интересного!</small></div><div class="card"><span class="label">Память Хомы</span><strong class="value" id="memory">Изучает клетку</strong><small id="stocks">Корм: 60 · вода: 70</small></div><div class="card"><span class="label">Время вместе</span><strong class="value time" id="time">00:00</strong><small>Никуда не спешим</small></div></section>
-<footer><span>При переносе Хома помнит своё намерение. Если припасы кончатся, он ищет крошки, ростки и капли воды.</span><a href="./index.html">Другие игры ↗</a></footer></main>
+<div class="habitat"><canvas id="cage" width="900" height="690" role="img" aria-label="Двумерная клетка: Хома самостоятельно гуляет, ест, пьёт, бегает в колесе и отдыхает."></canvas><div class="paused" id="overlay" hidden><span>Тихая пауза ☁</span></div></div>
+<section class="water-controls" aria-label="Запасы воды"><strong id="bottle-stock" aria-live="polite">В поилке: 70 / 70</strong><button class="quiet" id="refill-water">Пополнить воду</button><button class="quiet" id="empty-water">Опустошить поилку</button></section><details id="cage-editor"><summary>⚒ Изменить клетку</summary><p>Выбери предмет и нажми в клетке, чтобы переставить его. Или выбери этаж и положение ниже. Пока редактируешь, Хома отдыхает.</p><div class="editor-fields"><label>Предмет<select id="cage-item"></select></label><label>Этаж<select id="cage-floor"><option value="0">Первый</option><option value="1">Второй</option></select></label><label>Положение<input id="cage-x" type="range" min="150" max="780" value="300"></label></div><div class="water-controls"><button id="supply-fill" class="quiet">Пополнить запас</button><button id="supply-empty" class="quiet">Опустошить запас</button><button id="empty-all" class="quiet">Опустошить все запасы</button></div><p id="supply-status" role="status"></p><small>Капли и ростки постепенно восстанавливаются. Расстановка действует до перезагрузки страницы.</small></details><section class="needs"><div><label for="food">Сытость <b id="food-number">75%</b></label><progress id="food" max="100" value="75"></progress></div><div><label for="water">Запас воды <b id="water-number">75%</b></label><progress id="water" max="100" value="75"></progress></div></section><section class="cards"><div class="card"><span class="label">Сейчас у Хомы</span><strong class="value status" id="activity">Гуляет по клетке</strong><small id="thought">Столько всего интересного!</small></div><div class="card"><span class="label">Память Хомы</span><strong class="value" id="memory">Изучает клетку</strong><small id="stocks">Корм: 60 · вода: 70</small></div><div class="card"><span class="label">Время вместе</span><strong class="value time" id="time">00:00</strong><small>Никуда не спешим</small></div></section>
+<footer><span>При переносе Хома помнит своё намерение. Если припасы кончатся, он ищет крошки, ростки и капли воды. При сытости ниже 18% зарывается за червячками.</span><a href="./index.html">Другие игры ↗</a></footer></main>
 <dialog id="memory-menu" aria-labelledby="memory-title"><div class="memory-heading"><h2 id="memory-title">Память Хомы</h2><button id="close-memory" aria-label="Закрыть меню памяти">×</button></div>
 <p>Хома сам исследует клетку и записывает наблюдения. Здесь ты можешь исправить его записи или добавить подсказку. Подсказки могут быть ложными: Хома поверит им, но после проверки исправит запись. Реальные запасы от подсказок не меняются.</p>
 <form id="memory-form">
@@ -41,12 +44,15 @@ function setPause(value) {
     ? "▶ Продолжить"
     : "Ⅱ Пауза";
   document.querySelector("#pause").setAttribute("aria-pressed", String(paused));
-  document.querySelector("#overlay").hidden = !paused;
+  document.querySelector("#overlay").hidden =
+    !paused || document.querySelector("#cage-editor").open;
   document.querySelector("#live").textContent = paused
     ? "На паузе"
     : "Жизнь идёт";
 }
-document.querySelector("#pause").onclick = () => setPause(!paused);
+document.querySelector("#pause").onclick = () => {
+  if (!document.querySelector("#cage-editor").open) setPause(!paused);
+};
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) setPause(true);
 });
@@ -73,7 +79,7 @@ for (const [id, full] of [
 function resize() {
   const dpr = Math.min(devicePixelRatio || 1, 2);
   canvas.width = 900 * dpr;
-  canvas.height = 510 * dpr;
+  canvas.height = 690 * dpr;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   draw();
 }
@@ -203,12 +209,15 @@ function wheel() {
   ellipse(418, 298, 3, 3, "#dce4cc");
 }
 function bowls() {
+  propStart("eat", 640);
   ellipse(642, 401, 43, 9, "#6c61431a");
   round(603, 376, 77, 23, 10, "#b88265");
   ellipse(642, 377, 39, 12, "#e5b591");
   ellipse(642, 377, 32, 8, "#93704b");
   for (const g of grain.slice(0, Math.ceil((22 * pet.supplies.food) / 60)))
     ellipse(g.x, g.y, 3.5, 2, g.c > 0.5 ? "#e5c68b" : "#ba984f");
+  ctx.restore();
+  propStart("drink", 787);
   // Glass water bottle with a metal drinking spout.
   round(741, 176, 40, 109, 17, "#b7cdd0");
   round(746, 190, 30, 88, 12, "#d7e9e1");
@@ -226,6 +235,7 @@ function bowls() {
   line(762, 356, 750, 367, "#8a9894", 6);
   ellipse(748, 369, 4, 4, "#b9cbc6");
   for (const y of [196, 257]) line(736, y, 788, y, "#a8b8aa", 4);
+  ctx.restore();
 }
 function hamster(x, y, facing = pet.facing) {
   const activity = pet.activity,
@@ -293,13 +303,25 @@ function hamster(x, y, facing = pet.facing) {
     ctx.fillText("z", x + 39, y - 54 - Math.sin(pet.age + 1) * 3);
   }
 }
+function propStart(id, originalX) {
+  const item = pet.furniture[id],
+    scale = item.y === UPPER_FLOOR.y ? 0.55 : 1;
+  ctx.save();
+  ctx.translate(item.x, item.y - 180);
+  ctx.scale(scale, scale);
+  ctx.translate(-originalX, -398);
+}
 function draw() {
-  ctx.clearRect(0, 0, 900, 510);
+  ctx.clearRect(0, 0, 900, 690);
+  ctx.fillStyle = "#ede7d9";
+  ctx.fillRect(0, 0, 900, 690);
+  ctx.save();
+  ctx.translate(0, 180);
   backdrop();
-  round(35, 97, 830, 362, 23, "#c0cbb926");
-  round(45, 107, 810, 335, 15, "#f6f3df38");
+  round(35, -83, 830, 542, 23, "#c0cbb926");
+  round(45, -73, 810, 515, 15, "#f6f3df38");
   // Rear cage wires are deliberately faint, so the hamster stays easy to see.
-  for (let x = 65; x < 850; x += 37) line(x, 111, x, 384, "#879d8a30", 2);
+  for (let x = 65; x < 850; x += 37) line(x, -69, x, 384, "#879d8a30", 2);
   line(48, 144, 852, 144, "#9aac952e", 2);
   round(48, 366, 804, 85, 5, "#d9be8e");
   for (const b of bedding) {
@@ -310,47 +332,71 @@ function draw() {
     ctx.restore();
   }
   // An accessible wooden mezzanine and its sloped, grippy ladder.
-  round(80, UPPER_FLOOR.y, 480, 11, 4, "#b68b60");
-  round(80, UPPER_FLOOR.y, 480, 3, 2, "#efd3a2");
-  line(560, 180, 720, 403, "#bd966d", 18);
+  round(80, UPPER_FLOOR.y - 180, 480, 11, 4, "#b68b60");
+  round(80, UPPER_FLOOR.y - 180, 480, 3, 2, "#efd3a2");
+  line(560, UPPER_FLOOR.y - 175, 720, 403, "#bd966d", 18);
   for (let i = 0; i <= 14; i++) {
     const x = 560 + (160 * i) / 14,
-      y = 180 + (223 * i) / 14;
+      y = UPPER_FLOOR.y - 175 + ((578 - UPPER_FLOOR.y) * i) / 14;
     line(x - 7, y + 4, x + 7, y - 4, "#ecd5a6", 4);
   }
   for (const site of pet.sites) {
+    const ground = (site.y ?? 578) - 180;
     if (site.kind === "food" && site.id === "sprouts") {
       for (let i = 0; i < 5; i++) {
         const h = 4 + (site.stock / site.capacity) * 16;
         line(
           site.x - 16 + i * 8,
-          396,
+          ground - 2,
           site.x - 17 + i * 8,
-          396 - h,
+          ground - 2 - h,
           "#85986b",
           2,
         );
-        ellipse(site.x - 14 + i * 8, 396 - h, 4, 2, "#a5b97d");
+        ellipse(site.x - 14 + i * 8, ground - 2 - h, 4, 2, "#a5b97d");
       }
     } else if (site.stock > 1) {
       for (let i = 0; i < Math.min(5, Math.ceil(site.stock / 4)); i++)
         ellipse(
           site.x - 12 + i * 6,
-          (site.y ?? 398) + 3 + (i % 2) * 3,
+          ground + 3 + (i % 2) * 3,
           site.kind === "water" ? 2 : 3,
           2,
           site.kind === "water" ? "#9abfc4" : "#d8ad66",
         );
     }
   }
+  propStart("sleep", 185);
   house();
+  ctx.restore();
+  propStart("wheel", 420);
   wheel();
+  ctx.restore();
   bowls();
-  if (pet.held || pet.falling) hamster(pet.x, pet.y);
-  else if (pet.activity === "wheel") {
-    hamster(420, 367, 1);
-  } else if (pet.activity === "sleep") hamster(184, 382);
-  else hamster(pet.x, pet.y, pet.activity === "drink" ? -1 : pet.facing);
+  const h = petPosition();
+  if (pet.activity === "dig") {
+    ellipse(pet.x, 409, 24, 8, "#735a46");
+    round(pet.x - 38, 407, 76, 37, 16, "#91734f");
+    line(
+      pet.x + 18,
+      432,
+      pet.x + 28,
+      427 + Math.sin(pet.age * 8) * 3,
+      "#e7b399",
+      4,
+    );
+  }
+  hamster(h.x, h.y - 180, pet.activity === "drink" ? -1 : pet.facing);
+  if (document.querySelector("#cage-editor").open) {
+    const selected = cageItems(pet).find(
+      (i) => i.id === document.querySelector("#cage-item").value,
+    );
+    if (selected) {
+      ctx.strokeStyle = "#b77b47";
+      ctx.lineWidth = 3;
+      ctx.strokeRect(selected.x - 35, (selected.y ?? 578) - 235, 70, 60);
+    }
+  }
   // Transparent front and rounded enamel base.
   const pane = ctx.createLinearGradient(0, 405, 0, 448);
   pane.addColorStop(0, "#e6f0da09");
@@ -359,17 +405,18 @@ function draw() {
   round(35, 438, 830, 31, 12, "#73928b");
   round(43, 439, 814, 7, 3, "#94afa1");
   for (const x of [35, 854]) {
-    round(x, 100, 11, 346, 5, "#a4b5a0");
-    round(x + 2, 105, 3, 321, 2, "#cad5ba");
+    round(x, -80, 11, 526, 5, "#a4b5a0");
+    round(x + 2, -75, 3, 501, 2, "#cad5ba");
   }
-  round(35, 96, 830, 13, 6, "#8fa78f");
-  round(48, 98, 803, 4, 2, "#c7d3b4");
+  round(35, -84, 830, 13, 6, "#8fa78f");
+  round(48, -82, 803, 4, 2, "#c7d3b4");
   round(405, 446, 90, 15, 5, "#e6ddbc");
   ctx.fillStyle = "#637b6d";
   ctx.font = "bold 9px Arial";
   ctx.textAlign = "center";
   ctx.fillText("ХОМА ДОМА", 450, 457);
   ctx.textAlign = "left";
+  ctx.restore();
 }
 function frame(now) {
   requestAnimationFrame(frame);
@@ -409,19 +456,36 @@ function frame(now) {
 let drag = null;
 function petPosition() {
   if (!pet.held && !pet.falling && pet.activity === "wheel")
-    return { x: 420, y: 367 };
+    return {
+      x: pet.furniture.wheel.x,
+      y:
+        pet.furniture.wheel.y -
+        (pet.furniture.wheel.y === UPPER_FLOOR.y ? 17 : 31),
+    };
   if (!pet.held && !pet.falling && pet.activity === "sleep")
-    return { x: 184, y: 382 };
+    return { x: pet.furniture.sleep.x, y: pet.furniture.sleep.y - 16 };
   return { x: pet.x, y: pet.y };
 }
 function point(e) {
   const rect = canvas.getBoundingClientRect();
   return {
     x: ((e.clientX - rect.left) * 900) / rect.width,
-    y: ((e.clientY - rect.top) * 510) / rect.height,
+    y: ((e.clientY - rect.top) * 690) / rect.height,
   };
 }
 canvas.addEventListener("pointerdown", (e) => {
+  if (document.querySelector("#cage-editor").open) {
+    const pos = point(e);
+    moveCageItem(
+      pet,
+      document.querySelector("#cage-item").value,
+      pos.x,
+      pos.y < 380,
+    );
+    syncEditor();
+    draw();
+    return;
+  }
   if (paused || drag || e.button > 0) return;
   const p = point(e),
     h = petPosition();
@@ -606,6 +670,75 @@ document.querySelector("#forget-all").onclick = () => {
   for (const id of Object.keys(pet.memory)) forgetMemory(pet, id);
   renderMemories();
   fillPlaces();
+  draw();
+};
+const editor = document.querySelector("#cage-editor"),
+  itemInput = document.querySelector("#cage-item"),
+  floorInput = document.querySelector("#cage-floor"),
+  positionInput = document.querySelector("#cage-x");
+let editorWasPaused = false;
+for (const item of cageItems(pet)) {
+  const option = document.createElement("option");
+  option.value = item.id;
+  option.textContent = item.name;
+  itemInput.append(option);
+}
+function syncEditor() {
+  const item = cageItems(pet).find((i) => i.id === itemInput.value);
+  floorInput.value = item.y === UPPER_FLOOR.y ? "1" : "0";
+  positionInput.min = floorInput.value === "1" ? 170 : 150;
+  positionInput.max = floorInput.value === "1" ? 470 : 780;
+  positionInput.value = item.x;
+  const site = memoryPlaces(pet).find(
+    (s) =>
+      s.id === ({ eat: "main-food", drink: "main-water" }[item.id] ?? item.id),
+  );
+  for (const id of ["supply-fill", "supply-empty"])
+    document.querySelector("#" + id).disabled = !site;
+  document.querySelector("#supply-status").textContent = site
+    ? "Запас: " + Math.ceil(site.stock) + " / " + site.capacity
+    : "Этот предмет можно переставить.";
+  waterControls();
+}
+editor.addEventListener("toggle", () => {
+  document.querySelector("#pause").disabled = editor.open;
+  if (editor.open) {
+    editorWasPaused = paused;
+    setPause(true);
+    document.querySelector("#overlay").hidden = true;
+    syncEditor();
+  } else if (!editorWasPaused) setPause(false);
+  else setPause(true);
+  draw();
+});
+itemInput.onchange = () => {
+  syncEditor();
+  draw();
+};
+for (const input of [floorInput, positionInput])
+  input.oninput = () => {
+    moveCageItem(
+      pet,
+      itemInput.value,
+      Number(positionInput.value),
+      floorInput.value === "1",
+    );
+    syncEditor();
+    draw();
+  };
+for (const [id, full] of [
+  ["supply-fill", true],
+  ["supply-empty", false],
+]) {
+  document.querySelector("#" + id).onclick = () => {
+    setSupply(pet, itemInput.value, full);
+    syncEditor();
+    draw();
+  };
+}
+document.querySelector("#empty-all").onclick = () => {
+  for (const item of cageItems(pet)) setSupply(pet, item.id, false);
+  syncEditor();
   draw();
 };
 resize();

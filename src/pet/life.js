@@ -9,17 +9,17 @@ export const ACTIVITIES = {
   held: "У тебя в руках",
   fall: "Спускается на опилки",
   search: "Ищет припасы",
+  dig: "Ищет червячков под землёй",
   observe: "Изучает клетку",
 };
-export const UPPER_FLOOR = { left: 80, right: 560, y: 175, rampBottom: 720 };
-const places = { eat: 640, drink: 787, wheel: 420, sleep: 185 };
+export const UPPER_FLOOR = { left: 80, right: 560, y: 245, rampBottom: 720 };
 const clamp = (n, min = 0, max = 100) => Math.max(min, Math.min(max, n));
 export function createPet() {
   return {
     x: 300,
-    y: 398,
+    y: 578,
     target: 550,
-    targetY: 398,
+    targetY: 578,
     level: 0,
     climbing: false,
     facing: 1,
@@ -35,12 +35,19 @@ export function createPet() {
     held: false,
     falling: false,
     velocity: 0,
-    floor: 398,
+    floor: 578,
     goal: null,
     source: "drops",
     nextExploreAt: 0,
     observing: null,
     resume: null,
+    furniture: {
+      sleep: { x: 185, y: 578 },
+      wheel: { x: 420, y: 578 },
+      eat: { x: 640, y: 578 },
+      drink: { x: 787, y: 578 },
+    },
+    wormsFound: 0,
     supplies: { food: 60, water: 70 },
     memory: {},
     discoveries: 0,
@@ -50,7 +57,7 @@ export function createPet() {
         kind: "food",
         name: "семечки на втором этаже",
         x: 340,
-        y: 175,
+        y: 245,
         stock: 18,
         capacity: 18,
         regen: 0,
@@ -98,8 +105,8 @@ function choose(p, action, reason, random) {
   p.goal = null;
   p.source = null;
   p.next = action;
-  p.target = places[action] ?? 110 + random() * 680;
-  p.targetY = 398;
+  p.target = p.furniture[action]?.x ?? 110 + random() * 680;
+  p.targetY = p.furniture[action]?.y ?? 578;
   p.activity = "walk";
   p.reason = reason;
 }
@@ -109,7 +116,7 @@ export function memoryPlaces(p) {
       id: "main-food",
       kind: "food",
       name: "миска",
-      x: 640,
+      ...p.furniture.eat,
       stock: p.supplies.food,
       capacity: 60,
       regen: 0,
@@ -118,7 +125,7 @@ export function memoryPlaces(p) {
       id: "main-water",
       kind: "water",
       name: "поилка",
-      x: 787,
+      ...p.furniture.drink,
       stock: p.supplies.water,
       capacity: 70,
       regen: 0,
@@ -184,6 +191,16 @@ export function forgetMemory(p, id) {
   p.discoveries = Object.values(p.memory).filter((m) => m.finds > 0).length;
 }
 function seek(p, goal) {
+  if (goal === "eat" && p.food < 18) {
+    p.goal = "eat";
+    p.source = null;
+    p.next = "dig";
+    p.target = clamp(p.x, 100, 800);
+    p.targetY = 578;
+    p.activity = "walk";
+    p.reason = "Очень голоден. Под опилками могут быть червячки — поищу!";
+    return;
+  }
   p.goal = goal;
   const kind = goal === "eat" ? "food" : "water";
   const candidates = memoryPlaces(p).filter((s) => s.kind === kind);
@@ -205,7 +222,7 @@ function seek(p, goal) {
   const site = candidates[0];
   p.source = site.id;
   p.target = site.x;
-  p.targetY = site.y ?? 398;
+  p.targetY = site.y ?? 578;
   if (estimate(site) < 3) {
     p.activity = "sniff";
     p.next = "search";
@@ -253,7 +270,7 @@ function explore(p) {
   p.goal = null;
   p.source = site.id;
   p.target = site.x;
-  p.targetY = site.y ?? 398;
+  p.targetY = site.y ?? 578;
   p.next = "observe";
   p.activity = "walk";
   p.reason =
@@ -265,7 +282,7 @@ function explore(p) {
 function observeNearby(p, dt) {
   const site = memoryPlaces(p)
     .filter(
-      (s) => Math.abs(s.x - p.x) < 32 && Math.abs((s.y ?? 398) - p.y) < 20,
+      (s) => Math.abs(s.x - p.x) < 32 && Math.abs((s.y ?? 578) - p.y) < 20,
     )
     .sort((a, b) => Math.abs(a.x - p.x) - Math.abs(b.x - p.x))[0];
   if (!site) {
@@ -305,7 +322,7 @@ export function holdPet(p, x, y) {
 }
 export function moveHeldPet(p, x, y) {
   p.x = clamp(x, 80, 820);
-  p.y = clamp(y, 167, 430);
+  p.y = clamp(y, 167, 610);
 }
 function resumePet(p) {
   const saved = p.resume;
@@ -317,7 +334,7 @@ function resumePet(p) {
   }
   Object.assign(p, saved);
   if (
-    ["eat", "drink", "search", "observe", "sleep", "wheel"].includes(
+    ["eat", "drink", "search", "observe", "sleep", "wheel", "dig"].includes(
       saved.activity,
     )
   ) {
@@ -332,7 +349,7 @@ export function releasePet(p) {
   p.floor =
     p.x >= UPPER_FLOOR.left && p.x <= UPPER_FLOOR.right && p.y <= UPPER_FLOOR.y
       ? UPPER_FLOOR.y
-      : Math.max(398, p.y);
+      : Math.max(578, p.y);
   p.level = p.floor === UPPER_FLOOR.y ? 1 : 0;
   p.falling = p.y < p.floor;
   p.velocity = 0;
@@ -371,6 +388,13 @@ export function updatePet(p, dt, random = Math.random) {
           : null;
   observeNearby(p, dt);
   // An active need remains the goal until satisfied, including while carried.
+  if (
+    p.food < 18 &&
+    p.next !== "dig" &&
+    p.activity !== "dig" &&
+    p.activity !== "eat"
+  )
+    seek(p, "eat");
   if (urgent && !p.goal) seek(p, urgent);
   if (p.activity === "walk") {
     const upper = p.targetY === UPPER_FLOOR.y;
@@ -378,10 +402,10 @@ export function updatePet(p, dt, random = Math.random) {
       y = p.targetY;
     if (p.climbing) {
       x = upper ? UPPER_FLOOR.right : UPPER_FLOOR.rampBottom;
-      y = upper ? UPPER_FLOOR.y : 398;
+      y = upper ? UPPER_FLOOR.y : 578;
     } else if (p.level !== Number(upper)) {
       x = p.level ? UPPER_FLOOR.right : UPPER_FLOOR.rampBottom;
-      y = p.level ? UPPER_FLOOR.y : 398;
+      y = p.level ? UPPER_FLOOR.y : 578;
     }
     const dx = x - p.x,
       dy = y - p.y,
@@ -416,6 +440,20 @@ export function updatePet(p, dt, random = Math.random) {
     }
   } else {
     p.timer -= dt;
+    if (p.activity === "dig") {
+      p.y = Math.min(626, p.y + dt * 18);
+      if (p.timer <= 0) {
+        p.food = clamp(p.food + 35);
+        p.wormsFound++;
+        p.reason = "Нашёл червячка под опилками и подкрепился!";
+        p.activity = "walk";
+        p.next = "sniff";
+        p.target = p.x;
+        p.targetY = 578;
+        p.goal = null;
+      }
+      return p;
+    }
     if (p.activity === "observe" && p.timer <= 0) {
       const site = memoryPlaces(p).find((s) => s.id === p.source);
       if (site) {
@@ -527,4 +565,44 @@ export function updatePet(p, dt, random = Math.random) {
 // Changing the bottle never changes thirst or writes memories for the hamster.
 export function setWaterSupply(p, full) {
   p.supplies.water = full ? 70 : 0;
+}
+
+export function cageItems(p) {
+  return [
+    ...Object.entries(p.furniture).map(([id, pos]) => ({
+      id,
+      ...pos,
+      name: { sleep: "Домик", wheel: "Колесо", eat: "Миска", drink: "Поилка" }[
+        id
+      ],
+    })),
+    ...p.sites.filter((s) => !s.custom),
+  ];
+}
+export function moveCageItem(p, id, x, upper) {
+  if (!Number.isFinite(x)) return false;
+  const item = p.furniture[id] ?? p.sites.find((s) => s.id === id && !s.custom);
+  if (!item) return false;
+  item.x = clamp(x, upper ? 170 : 150, upper ? 470 : 780);
+  item.y = upper ? UPPER_FLOOR.y : 578;
+  const sourceId =
+    id === "eat" ? "main-food" : id === "drink" ? "main-water" : id;
+  const plan = p.resume ?? p;
+  if (plan.source === sourceId || plan.next === id || plan.activity === id) {
+    plan.target = item.x;
+    plan.targetY = item.y;
+    if (plan.activity !== "walk") {
+      plan.next = plan.activity;
+      plan.activity = "walk";
+    }
+  }
+  return true;
+}
+export function setSupply(p, id, full) {
+  if (id === "eat" || id === "main-food") p.supplies.food = full ? 60 : 0;
+  else if (id === "drink" || id === "main-water") setWaterSupply(p, full);
+  else {
+    const site = p.sites.find((s) => s.id === id && !s.custom);
+    if (site) site.stock = full ? site.capacity : 0;
+  }
 }

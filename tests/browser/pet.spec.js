@@ -33,7 +33,7 @@ test("mouse and touch can carry the hamster within the cage and release it", asy
     p = await page.evaluate(() => petState());
   const xy = (x, y) => ({
     x: rect.x + (x * rect.width) / 900,
-    y: rect.y + (y * rect.height) / 510,
+    y: rect.y + (y * rect.height) / 690,
   });
   const start = xy(p.x, p.y - 25),
     end = xy(700, 220);
@@ -165,4 +165,42 @@ test("water buttons empty and refill the real bottle even while paused", async (
   expect(after.water).toBe(before.water);
   expect(after.memory).toEqual(before.memory);
   await expect(page.locator("#bottle-stock")).toHaveText("В поилке: 70 / 70");
+});
+
+test("cage editor moves objects between floors and controls all reserves", async ({
+  page,
+}) => {
+  await page.goto("/my-game/pet.html");
+  await page.locator("#cage-editor summary").click();
+  await page.locator("#cage-item").selectOption("drink");
+  await page.locator("#cage-floor").selectOption("1");
+  await page.locator("#cage-x").fill("300");
+  expect((await page.evaluate(() => petState())).furniture.drink).toEqual({
+    x: 300,
+    y: 245,
+  });
+  await page.locator("#empty-all").click();
+  const empty = await page.evaluate(() => petState());
+  expect(empty.supplies).toEqual({ food: 0, water: 0 });
+  expect(empty.sites.every((s) => s.stock === 0)).toBe(true);
+  await page.locator("#supply-fill").click();
+  expect((await page.evaluate(() => petState())).supplies.water).toBe(70);
+  await page.screenshot({ path: "/tmp/pet-editor.png", fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(390);
+  await page.locator("#cage-item").selectOption("sleep");
+  const canvas = page.locator("#cage");
+  await canvas.scrollIntoViewIfNeeded();
+  const bounds = await canvas.boundingBox();
+  await page.mouse.click(
+    bounds.x + (bounds.width * 400) / 900,
+    bounds.y + (bounds.height * 240) / 690,
+  );
+  const home = (await page.evaluate(() => petState())).furniture.sleep;
+  expect(home.x).toBeCloseTo(400, 0);
+  expect(home.y).toBe(245);
+  await page.locator("#cage-editor summary").click();
+  await page.waitForFunction(() => !petState().paused);
 });
