@@ -18,14 +18,15 @@ import {
   transfer,
 } from "./model.js";
 import "./style.css";
+import { enhanceWorld } from "./visuals.js";
 
 const $ = (id) => document.getElementById(id);
 document.querySelector("#app").innerHTML = `
-<div id="hud"><header><div class="brand">ДО ОРБИТЫ<small>БОЛЬШОЕ НАЧИНАЕТСЯ С МАЛОГО</small></div><div class="top-actions"><button id="wallet">0 ₽</button><button id="bag">Рюкзак · I</button><button id="pause">Ⅱ</button></div></header>
+<div id="hud"><header><div class="brand">ДО ОРБИТЫ<small>БОЛЬШОЕ НАЧИНАЕТСЯ С МАЛОГО</small></div><div class="top-actions"><button id="quality">Графика: детально</button><button id="wallet">0 ₽</button><button id="bag">Рюкзак · I</button><button id="pause">Ⅱ</button></div></header>
 <div class="location"><small>ТВОЙ УЧАСТОК / 01</small><strong id="place">Дом</strong><p id="place-note">За дверью — целый мир ненужных вещей. Возможно, не таких уж ненужных.</p></div>
-<div id="crosshair"></div><div id="prompt"></div><div id="toast"></div><div class="bottom"><div class="cargo"><small>СОБРАНО В РЮКЗАК</small><strong id="count">0 предметов</strong></div><div class="help">WASD — идти · SHIFT — бежать · МЫШЬ — осмотреться<br>E — взять / сложить · I — рюкзак · ESC — пауза</div></div></div>
+<div id="crosshair"></div><div id="prompt"></div><div id="toast"></div><div class="bottom"><div class="cargo"><small>СОБРАНО В РЮКЗАК</small><strong id="count">0 предметов</strong></div><div class="help">WASD — идти · SHIFT — бежать · МЫШЬ — осмотреться<br>E — взять / сложить · I — рюкзак · G — графика · ESC — пауза</div></div></div>
 <div id="inventory" hidden><button id="close-inventory">×</button><h2>Твои находки</h2><p>Рюкзак / запас в гараже. Подойди к верстаку, чтобы разгрузиться.</p><ul id="items"></ul><p>Здесь будут детали будущей космической ракеты. Собирай ракету на верстаке. Более качественные детали повышают шанс взлёта.</p></div>
-<div id="menu"><div class="panel"><div class="eyebrow">ГЛАВА 01 · ПОКА МЫ НА ЗЕМЛЕ</div><h1>До<br><span>орбиты.</span></h1><p>Дом. Старый гараж. Мусорка за дорогой.<br>Всё необходимое, чтобы однажды построить космическую ракету из того, что другие выбросили.</p><button class="primary" id="start">Выйти навстречу идее →</button><a href="./index.html">К хомячьей жизни</a><div class="controls-note">Мусорка → работа → магазин → гараж → запуск. На карте появились магазин слева от дома и работа справа от мусорки.<br>WASD + мышь · E — взаимодействовать · I — рюкзак<br>Прогресс сохраняется в этом браузере.</div></div></div>
+<div id="menu"><div class="panel"><div class="eyebrow">ГЛАВА 01 · ПОКА МЫ НА ЗЕМЛЕ</div><h1>До<br><span>орбиты.</span></h1><p>Дом. Старый гараж. Мусорка за дорогой.<br>Всё необходимое, чтобы однажды построить космическую ракету из того, что другие выбросили.</p><button class="primary" id="start">Выйти навстречу идее →</button><button class="secondary" id="menu-quality">Графика: детально · G</button><a href="./index.html">К хомячьей жизни</a><div class="controls-note">Мусорка → работа → магазин → гараж → запуск. На карте появились магазин слева от дома и работа справа от мусорки.<br>WASD + мышь · E — взаимодействовать · I — рюкзак<br>Прогресс сохраняется в этом браузере.</div></div></div>
 <div id="touch"><div class="pad"><span></span><button data-key="KeyW">↑</button><span></span><button data-key="KeyA">←</button><button data-key="KeyS">↓</button><button data-key="KeyD">→</button></div><button id="touch-use">E</button></div>`;
 const scene = new THREE.Scene();
 scene.background = new THREE.Color("#bbc8c4");
@@ -55,12 +56,12 @@ camera.rotation.order = "YXZ";
 const pmrem = new THREE.PMREMGenerator(renderer),
   room = new RoomEnvironment();
 scene.environment = pmrem.fromScene(room, 0.07).texture;
-scene.environmentIntensity = 0.25;
+scene.environmentIntensity = 0.45;
 room.dispose();
 pmrem.dispose();
-scene.add(new THREE.HemisphereLight("#e0edee", "#77715b", 1.7));
-const sun = new THREE.DirectionalLight("#fff0cc", 3);
-sun.position.set(-25, 50, 20);
+scene.add(new THREE.HemisphereLight("#e0edee", "#77715b", 1.05));
+const sun = new THREE.DirectionalLight("#ffdeb0", 3.4);
+sun.position.set(-25, 35, 20);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 Object.assign(sun.shadow.camera, {
@@ -331,7 +332,14 @@ function makeItem(type, index) {
   const g = new THREE.Group(),
     m = materials[index];
   if (type.shape === "pipe") {
-    const o = cylinder(0.12, 0.9, m, 0, 0.14, 0, g);
+    const pipeMaterial = m.clone();
+    pipeMaterial.side = THREE.DoubleSide;
+    const o = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.12, 0.12, 0.9, 20, 1, true),
+      pipeMaterial,
+    );
+    o.position.y = 0.14;
+    g.add(o);
     o.rotation.z = Math.PI / 2;
   } else if (type.shape === "coil" || type.shape === "tire") {
     const o = new THREE.Mesh(
@@ -351,7 +359,12 @@ function makeItem(type, index) {
     box(0.12, 0.1, 0.12, M.metal, 0, 0.7, 0, g);
   } else if (type.shape === "bolt") {
     cylinder(0.08, 0.28, m, 0, 0.14, 0, g);
-    box(0.19, 0.08, 0.19, m, 0, 0.3, 0, g);
+    const head = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.12, 0.12, 0.08, 6),
+      m,
+    );
+    head.position.y = 0.3;
+    g.add(head);
   } else
     box(
       type.shape === "board" ? 1.1 : 0.55,
@@ -390,6 +403,26 @@ for (let i = 0; i < 160; i++) {
     pickups.push(g);
   }
 }
+const graphics = enhanceWorld(scene, renderer, M);
+let fastGraphics = false;
+try {
+  fastGraphics = localStorage.getItem("rocket-graphics") === "fast";
+} catch {}
+function setGraphics() {
+  graphics.setQuality(fastGraphics);
+  $("quality").textContent =
+    "Графика: " + (fastGraphics ? "быстро" : "детально");
+  $("menu-quality").textContent = $("quality").textContent + " · G";
+}
+setGraphics();
+$("quality").onclick = () => {
+  fastGraphics = !fastGraphics;
+  setGraphics();
+  try {
+    localStorage.setItem("rocket-graphics", fastGraphics ? "fast" : "high");
+  } catch {}
+};
+$("menu-quality").onclick = () => $("quality").click();
 batchStatic(world);
 camera.position.set(0, 1.65, 8);
 let yaw = 0,
@@ -548,6 +581,10 @@ window.addEventListener("keydown", (e) => {
       return;
     }
     pause();
+    return;
+  }
+  if (e.code === "KeyG" && !e.repeat) {
+    $("quality").click();
     return;
   }
   if (paused || panelKind) return;
@@ -987,11 +1024,13 @@ function frame(now) {
   }
   toastTime -= dt;
   if (toastTime <= 0) $("toast").style.opacity = 0;
+  graphics.update(flight, rocketVisual);
   renderer.render(scene, camera);
 }
 requestAnimationFrame(frame);
 window.rocketState = () => ({
   paused,
+  fastGraphics,
   money,
   rocket: { ...rocket },
   flights,

@@ -421,3 +421,30 @@ kbd {
   font-size: 20px;
   color: #efc773;
 }
+
+@media (max-width: 650px) {
+  header {
+    align-items: flex-start;
+  }
+  .top-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    max-width: 65%;
+    gap: 4px;
+  }
+  .top-actions button {
+    font-size: 10px;
+    padding: 8px;
+  }
+  .location {
+    top: 115px;
+  }
+}
+.panel .secondary {
+  background: #263b3e;
+  color: #efc773;
+  border: 1px solid #efc77366;
+  padding: 12px 16px;
+  border-radius: 5px;
+  margin: 0 0 14px 10px;
+}
