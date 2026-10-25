@@ -302,3 +302,121 @@ progress.low::-webkit-progress-value {
 progress.low::-moz-progress-bar {
   background: #ce9874;
 }
+
+.header-actions {
+  display: flex;
+  gap: 8px;
+}
+#memory-menu {
+  width: min(600px, 94vw);
+  max-height: 86vh;
+  overflow: auto;
+  border: 1px solid #d6cbb5;
+  border-radius: 24px;
+  background: #fffaf0;
+  color: #3d514b;
+  padding: 25px;
+}
+#memory-menu::backdrop {
+  background: #304d4566;
+  backdrop-filter: blur(3px);
+}
+#memory-menu p {
+  font-size: 12px;
+  line-height: 1.7;
+  color: #788270;
+}
+.memory-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+.memory-heading h2 {
+  font-size: 27px;
+  margin: 0;
+}
+#close-memory {
+  background: none;
+  border: 0;
+  font-size: 30px;
+  color: #52665e;
+  cursor: pointer;
+}
+#memory-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  border-block: 1px solid #e3ddce;
+  padding: 20px 0;
+}
+#memory-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+}
+#memory-form select {
+  background: #f4f0e4;
+  color: #3d514b;
+  border: 1px solid #d8d6c8;
+  border-radius: 9px;
+  padding: 10px;
+  min-width: 0;
+  font: inherit;
+}
+#position-label,
+#memory-truth {
+  grid-column: span 2;
+}
+#position-label[hidden] {
+  display: none;
+}
+#memory-x {
+  width: 100%;
+  accent-color: #73928b;
+}
+.map-ends {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #87917e;
+}
+.memory-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 0;
+  border-bottom: 1px solid #e9e1d0;
+  font-size: 13px;
+}
+.memory-row small {
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+  color: #85907a;
+}
+.memory-row .quiet {
+  min-width: auto;
+  padding: 8px 12px;
+}
+#memory-menu button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+@media (max-width: 600px) {
+  .header-actions {
+    gap: 4px;
+  }
+  .header-actions .quiet {
+    min-width: auto;
+    padding: 9px;
+  }
+  .memory-heading h3 {
+    font-size: 15px;
+  }
+  #memory-menu {
+    padding: 17px;
+  }
+}

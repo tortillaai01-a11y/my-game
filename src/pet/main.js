@@ -6,13 +6,25 @@ import {
   holdPet,
   moveHeldPet,
   releasePet,
+  memoryPlaces,
+  editMemory,
+  forgetMemory,
 } from "./life.js";
 document.querySelector("#app").innerHTML = `
-<main class="shell"><header><div class="brand"><div class="logo">🐹</div><div><h1>Хома дома</h1><div class="tag">МАЛЕНЬКАЯ ЖИЗНЬ РЯДОМ</div></div></div><button class="quiet" id="pause">Ⅱ Пауза</button></header>
+<main class="shell"><header><div class="brand"><div class="logo">🐹</div><div><h1>Хома дома</h1><div class="tag">МАЛЕНЬКАЯ ЖИЗНЬ РЯДОМ</div></div></div><div class="header-actions"><button class="quiet" id="open-memory">Память</button><button class="quiet" id="pause">Ⅱ Пауза</button></div></header>
 <section class="intro"><div><div class="eyebrow">ЗНАКОМЬСЯ, ЭТО ХОМА</div><h2>У него свои маленькие дела.</h2><p>Он сам выбирает, куда пойти. Возьми Хому мышью или пальцем и перенеси внутри клетки.</p></div><div class="live"><span class="dot"></span><span id="live">Жизнь идёт</span></div></section>
 <div class="habitat"><canvas id="cage" width="900" height="510" role="img" aria-label="Двумерная клетка: Хома самостоятельно гуляет, ест, пьёт, бегает в колесе и отдыхает."></canvas><div class="paused" id="overlay" hidden><span>Тихая пауза ☁</span></div></div>
 <section class="needs"><div><label for="food">Сытость <b id="food-number">75%</b></label><progress id="food" max="100" value="75"></progress></div><div><label for="water">Запас воды <b id="water-number">75%</b></label><progress id="water" max="100" value="75"></progress></div></section><section class="cards"><div class="card"><span class="label">Сейчас у Хомы</span><strong class="value status" id="activity">Гуляет по клетке</strong><small id="thought">Столько всего интересного!</small></div><div class="card"><span class="label">Память Хомы</span><strong class="value" id="memory">Изучает клетку</strong><small id="stocks">Корм: 60 · вода: 70</small></div><div class="card"><span class="label">Время вместе</span><strong class="value time" id="time">00:00</strong><small>Никуда не спешим</small></div></section>
-<footer><span>При переносе Хома помнит своё намерение. Если припасы кончатся, он ищет крошки, ростки и капли воды.</span><a href="./index.html">Другие игры ↗</a></footer></main>`;
+<footer><span>При переносе Хома помнит своё намерение. Если припасы кончатся, он ищет крошки, ростки и капли воды.</span><a href="./index.html">Другие игры ↗</a></footer></main>
+<dialog id="memory-menu" aria-labelledby="memory-title"><div class="memory-heading"><h2 id="memory-title">Память Хомы</h2><button id="close-memory" aria-label="Закрыть меню памяти">×</button></div>
+<p>Запиши, где есть или нет еды и воды. Подсказки могут быть ложными: Хома поверит им, но после проверки исправит запись. Реальные запасы от подсказок не меняются.</p>
+<form id="memory-form">
+<label>Что искать<select id="memory-kind"><option value="food">Еду</option><option value="water">Воду</option></select></label>
+<label>Место<select id="memory-place"></select></label>
+<label id="position-label" hidden>Место в клетке: <output id="position-number">450</output><input id="memory-x" type="range" min="80" max="820" value="450"/><span class="map-ends">← Домик <span>Поилка →</span></span></label>
+<label>Что Хома будет помнить<select id="memory-belief"><option value="yes">Здесь есть припасы</option><option value="no">Здесь ничего нет</option></select></label>
+<p id="memory-truth" role="status"></p><button class="quiet" type="submit">Записать воспоминание</button></form>
+<div class="memory-heading"><h3>Воспоминания</h3><button id="forget-all" class="quiet">Удалить все</button></div><div id="memory-list"></div><p>Пока меню открыто, жизнь на паузе. Память действует до перезагрузки страницы.</p></dialog>`;
 const canvas = document.querySelector("#cage"),
   ctx = canvas.getContext("2d"),
   pet = createPet();
@@ -342,8 +354,9 @@ function frame(now) {
     lastActivity = pet.activity;
     document.querySelector("#activity").textContent = ACTIVITIES[pet.activity];
     document.querySelector("#thought").textContent = pet.reason;
-    document.querySelector("#memory").textContent = pet.discoveries
-      ? "Помнит мест: " + pet.discoveries
+    document.querySelector("#memory").textContent = Object.keys(pet.memory)
+      .length
+      ? "Записей: " + Object.keys(pet.memory).length
       : "Изучает клетку";
     document.querySelector("#stocks").textContent =
       "Корм: " +
@@ -421,6 +434,134 @@ function endDrag(e) {
 for (const name of ["pointerup", "pointercancel", "lostpointercapture"])
   canvas.addEventListener(name, endDrag);
 window.addEventListener("blur", () => setPause(true));
+const menu = document.querySelector("#memory-menu");
+let memoryWasPaused = false;
+const kindInput = document.querySelector("#memory-kind"),
+  placeInput = document.querySelector("#memory-place"),
+  beliefInput = document.querySelector("#memory-belief"),
+  xInput = document.querySelector("#memory-x");
+function selectedPlace() {
+  const known = memoryPlaces(pet).find((s) => s.id === placeInput.value);
+  if (known) return known;
+  return (
+    memoryPlaces(pet).find(
+      (s) =>
+        s.kind === kindInput.value && Math.abs(s.x - Number(xInput.value)) < 18,
+    ) ?? { x: Number(xInput.value), stock: 0 }
+  );
+}
+function previewMemory() {
+  document.querySelector("#position-label").hidden = placeInput.value !== "new";
+  document.querySelector("#position-number").textContent = xInput.value;
+  const site = selectedPlace(),
+    actual = site.stock >= 1,
+    belief = beliefInput.value === "yes";
+  document.querySelector("#memory-truth").textContent =
+    (actual === belief ? "Правдивая" : "Ложная") +
+    " подсказка сейчас: на этом месте " +
+    (actual ? "есть припасы." : "припасов нет.");
+}
+function fillPlaces() {
+  const previous = placeInput.value;
+  placeInput.replaceChildren();
+  for (const site of memoryPlaces(pet).filter(
+    (s) => s.kind === kindInput.value,
+  )) {
+    const option = document.createElement("option");
+    option.value = site.id;
+    option.textContent = site.name;
+    placeInput.append(option);
+  }
+  const option = document.createElement("option");
+  option.value = "new";
+  option.textContent = "Другое место в клетке";
+  placeInput.append(option);
+  if ([...placeInput.options].some((o) => o.value === previous))
+    placeInput.value = previous;
+  previewMemory();
+}
+function renderMemories() {
+  const list = document.querySelector("#memory-list");
+  list.replaceChildren();
+  const entries = Object.entries(pet.memory);
+  document.querySelector("#forget-all").disabled = !entries.length;
+  if (!entries.length) {
+    const empty = document.createElement("p");
+    empty.textContent = "Пока нет записей. Добавь первую подсказку.";
+    list.append(empty);
+  }
+  for (const [id, m] of entries) {
+    const site = memoryPlaces(pet).find((s) => s.id === id);
+    if (!site) continue;
+    const row = document.createElement("div");
+    row.className = "memory-row";
+    const description = document.createElement("div"),
+      title = document.createElement("strong"),
+      detail = document.createElement("small");
+    const present = m.injected ? m.present : m.stock >= 1;
+    title.textContent =
+      site.name +
+      " · " +
+      (site.kind === "food" ? "еда" : "вода") +
+      (present ? " есть" : " отсутствует");
+    detail.textContent =
+      (m.injected ? "Твоя подсказка" : "Проверено Хомой") +
+      " · В клетке сейчас: " +
+      (site.stock >= 1 ? "есть" : "нет");
+    description.append(title, detail);
+    const remove = document.createElement("button");
+    remove.className = "quiet";
+    remove.textContent = "Удалить";
+    remove.setAttribute("aria-label", "Удалить воспоминание: " + site.name);
+    remove.onclick = () => {
+      forgetMemory(pet, id);
+      renderMemories();
+      fillPlaces();
+      draw();
+    };
+    row.append(description, remove);
+    list.append(row);
+  }
+  document.querySelector("#memory").textContent = "Записей: " + entries.length;
+}
+document.querySelector("#open-memory").onclick = () => {
+  memoryWasPaused = paused;
+  setPause(true);
+  fillPlaces();
+  renderMemories();
+  menu.showModal();
+};
+document.querySelector("#close-memory").onclick = () => menu.close();
+menu.addEventListener("close", () => {
+  if (!memoryWasPaused && !document.hidden) setPause(false);
+});
+kindInput.onchange = fillPlaces;
+placeInput.onchange = previewMemory;
+beliefInput.onchange = previewMemory;
+xInput.oninput = previewMemory;
+document.querySelector("#memory-form").onsubmit = (e) => {
+  e.preventDefault();
+  const id = editMemory(pet, {
+    id: placeInput.value,
+    kind: kindInput.value,
+    x: placeInput.value === "new" ? Number(xInput.value) : undefined,
+    present: beliefInput.value === "yes",
+  });
+  if (!id) {
+    document.querySelector("#memory-truth").textContent =
+      "Можно добавить до 24 своих мест. Удали ненужную запись.";
+    return;
+  }
+  renderMemories();
+  fillPlaces();
+  draw();
+};
+document.querySelector("#forget-all").onclick = () => {
+  for (const id of Object.keys(pet.memory)) forgetMemory(pet, id);
+  renderMemories();
+  fillPlaces();
+  draw();
+};
 resize();
 requestAnimationFrame(frame);
 window.petState = () => structuredClone({ ...pet, paused });

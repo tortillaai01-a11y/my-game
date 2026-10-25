@@ -85,53 +85,127 @@ function choose(p, action, reason, random) {
   p.activity = "walk";
   p.reason = reason;
 }
+export function memoryPlaces(p) {
+  return [
+    {
+      id: "main-food",
+      kind: "food",
+      name: "миска",
+      x: 640,
+      stock: p.supplies.food,
+      capacity: 60,
+      regen: 0,
+    },
+    {
+      id: "main-water",
+      kind: "water",
+      name: "поилка",
+      x: 787,
+      stock: p.supplies.water,
+      capacity: 70,
+      regen: 0,
+    },
+    ...p.sites,
+  ];
+}
+export function editMemory(p, { id, kind, x, present }) {
+  if (!["food", "water"].includes(kind) || typeof present !== "boolean")
+    return null;
+  let site = memoryPlaces(p).find((s) => s.id === id && s.kind === kind);
+  if (!site && Number.isFinite(x))
+    site = memoryPlaces(p).find(
+      (s) => s.kind === kind && Math.abs(s.x - x) < 18,
+    );
+  if (!site) {
+    if (!Number.isFinite(x) || p.sites.filter((s) => s.custom).length >= 24)
+      return null;
+    let n = 1;
+    while (p.sites.some((s) => s.id === "hint-" + n)) n++;
+    site = {
+      id: "hint-" + n,
+      kind,
+      name: "место " + Math.round(clamp(x, 80, 820)),
+      x: clamp(x, 80, 820),
+      stock: 0,
+      capacity: 100,
+      regen: 0,
+      custom: true,
+    };
+    p.sites.push(site);
+  }
+  p.memory[site.id] = {
+    finds: 0,
+    misses: 0,
+    stock: present ? 25 : 0,
+    time: p.age,
+    injected: true,
+    present,
+  };
+  reconsider(p, site.id);
+  return site.id;
+}
+function reconsider(p, id) {
+  if (!p.goal) return;
+  if (p.held || p.falling) {
+    if (p.resume) {
+      p.resume.activity = "sniff";
+      p.resume.timer = 0;
+      p.resume.source = null;
+    }
+  } else {
+    p.activity = "sniff";
+    p.timer = 0;
+    p.source = null;
+  }
+}
+export function forgetMemory(p, id) {
+  delete p.memory[id];
+  const site = p.sites.find((s) => s.id === id);
+  if (site?.custom) p.sites = p.sites.filter((s) => s.id !== id);
+  reconsider(p, id);
+  p.discoveries = Object.values(p.memory).filter((m) => m.finds > 0).length;
+}
 function seek(p, goal) {
   p.goal = goal;
   const kind = goal === "eat" ? "food" : "water";
-  if (p.supplies[kind] > 0.01) {
-    p.source = "main";
-    p.next = goal;
-    p.target = places[goal];
-    p.activity = "walk";
-    p.reason =
-      goal === "eat"
-        ? "Проголодался! Пойду к миске."
-        : "Хочу пить. Поилка у правой стенки.";
-    return;
-  }
-  const candidates = p.sites.filter((s) => s.kind === kind);
-  // Estimate replenishment from previous visits; actual stock is learned on arrival.
+  const candidates = memoryPlaces(p).filter((s) => s.kind === kind);
   const estimate = (s) => {
     const m = p.memory[s.id];
-    if (!m) return 10;
+    if (m?.injected) return m.present ? 25 : p.age - m.time < 45 ? 0 : 10;
+    if (!m) return s.id.startsWith("main") ? s.stock : 10;
     return Math.min(s.capacity, m.stock + (p.age - m.time) * s.regen);
   };
   candidates.sort((a, b) => {
     const score = (s) =>
       (estimate(s) >= 3 ? 1000 : 0) +
-      (p.memory[s.id]?.finds ? 200 : 0) -
+      (p.memory[s.id]?.injected && p.memory[s.id].present ? 700 : 0) +
+      (p.memory[s.id]?.finds ? 200 : 0) +
+      (s.id.startsWith("main") ? 500 : 0) -
       Math.abs(p.x - s.x);
     return score(b) - score(a);
   });
   const site = candidates[0];
+  p.source = site.id;
+  p.target = site.x;
   if (estimate(site) < 3) {
-    p.source = site.id;
     p.activity = "sniff";
     p.next = "search";
-    p.target = site.x;
     p.timer = 3;
-    p.reason = "Здесь пока пусто. Подожду, пока появятся новые припасы.";
+    p.reason = "Помню пустые места. Подожду и проверю запасы ещё раз.";
     return;
   }
-  p.source = site.id;
-  p.next = "search";
-  p.target = site.x;
+  p.next =
+    site.id.startsWith("main") && !p.memory[site.id]?.injected
+      ? goal
+      : "search";
   p.activity = "walk";
-  p.reason = p.memory[site.id]?.finds
-    ? "Помню: здесь были " + site.name + ". Проверю снова."
-    : kind === "food"
-      ? "Миска пуста. Поищу еду в клетке."
-      : "Поилка пуста. Поищу капли воды.";
+  p.reason = p.memory[site.id]?.injected
+    ? "Мне подсказали: здесь есть " +
+      (kind === "food" ? "еда" : "вода") +
+      ". Проверю!"
+    : p.memory[site.id]?.finds
+      ? "Помню: здесь были " + site.name + ". Проверю снова."
+      : "Пойду проверю: " + site.name + ".";
 }
 function remember(p, site, found) {
   const old = p.memory[site.id] ?? { finds: 0, misses: 0 };
@@ -239,7 +313,7 @@ export function updatePet(p, dt, random = Math.random) {
   } else {
     p.timer -= dt;
     if (p.activity === "search" && p.timer <= 0) {
-      const site = p.sites.find((s) => s.id === p.source);
+      const site = memoryPlaces(p).find((s) => s.id === p.source);
       if (site) {
         remember(p, site, site.stock >= 1);
         if (site.stock >= 1) {
@@ -253,15 +327,26 @@ export function updatePet(p, dt, random = Math.random) {
     }
     if (p.activity === "eat" || p.activity === "drink") {
       const kind = p.activity === "eat" ? "food" : "water",
-        site = p.sites.find((s) => s.id === p.source);
-      const stock = p.source === "main" ? p.supplies[kind] : (site?.stock ?? 0);
+        site = memoryPlaces(p).find((s) => s.id === p.source);
+      const stock = p.source?.startsWith("main")
+        ? p.supplies[kind]
+        : (site?.stock ?? 0);
       const used = Math.min(
         stock,
         dt * (kind === "food" ? 11 : 16),
         100 - p[kind],
       );
-      if (p.source === "main") p.supplies[kind] -= used;
-      else if (site) {
+      if (p.source?.startsWith("main")) {
+        p.supplies[kind] -= used;
+        const id = "main-" + kind,
+          old = p.memory[id];
+        p.memory[id] = {
+          finds: Math.max(1, old?.finds ?? 0),
+          misses: old?.misses ?? 0,
+          stock: p.supplies[kind],
+          time: p.age,
+        };
+      } else if (site) {
         site.stock -= used;
         const m = p.memory[site.id];
         if (m) {

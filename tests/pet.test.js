@@ -7,6 +7,8 @@ import {
   holdPet,
   moveHeldPet,
   releasePet,
+  editMemory,
+  forgetMemory,
 } from "../src/pet/life.js";
 test("hamster walks by itself, arrives without overshoot, and stays inside its cage", () => {
   const pet = createPet();
@@ -116,4 +118,34 @@ test("empty stations lead to exploration and learned sources sustain the hamster
   assert.equal(p.supplies.water, 0);
   for (const site of p.sites)
     assert.ok(site.stock >= 0 && site.stock <= site.capacity);
+});
+
+test("false memories redirect search, supply no food and are corrected on inspection", () => {
+  const p = { ...createPet(), food: 20, x: 450 };
+  const id = editMemory(p, { kind: "food", x: 450, present: true });
+  const stock = p.supplies.food;
+  updatePet(p, 0.1);
+  assert.equal(p.source, id);
+  for (let i = 0; i < 50; i++) updatePet(p, 0.1);
+  assert.equal(p.memory[id].injected, undefined);
+  assert.equal(p.memory[id].stock, 0);
+  assert.ok(p.memory[id].misses > 0);
+  assert.ok(p.food < 20);
+  assert.equal(p.supplies.food, stock);
+  forgetMemory(p, id);
+  assert.equal(p.memory[id], undefined);
+  assert.equal(
+    p.sites.some((s) => s.id === id),
+    false,
+  );
+});
+test("a false absence makes the hamster avoid a full bowl; deleting it restores the option", () => {
+  const p = { ...createPet(), food: 20 };
+  editMemory(p, { id: "main-food", kind: "food", present: false });
+  updatePet(p, 0.1);
+  assert.notEqual(p.source, "main-food");
+  assert.equal(p.supplies.food, 60);
+  forgetMemory(p, "main-food");
+  updatePet(p, 0.1);
+  assert.equal(p.source, "main-food");
 });

@@ -80,3 +80,45 @@ test("mouse and touch can carry the hamster within the cage and release it", asy
   });
   await page.waitForFunction(() => !petState().held);
 });
+test("memory menu adds true and false hints and deletes individual or all memories", async ({
+  page,
+}) => {
+  await page.goto("/my-game/pet.html");
+  await page.locator("#open-memory").click();
+  await expect(page.locator("#memory-menu")).toBeVisible();
+  expect((await page.evaluate(() => petState())).paused).toBe(true);
+  await page.locator("#memory-place").selectOption("main-food");
+  await page.locator("#memory-belief").selectOption("no");
+  await expect(page.locator("#memory-truth")).toContainText("Ложная");
+  await page.getByRole("button", { name: "Записать воспоминание" }).click();
+  expect(
+    (await page.evaluate(() => petState())).memory["main-food"].present,
+  ).toBe(false);
+  await page.locator("#memory-kind").selectOption("water");
+  await page.locator("#memory-place").selectOption("new");
+  await page.locator("#memory-x").fill("450");
+  await page.locator("#memory-belief").selectOption("yes");
+  await page.getByRole("button", { name: "Записать воспоминание" }).click();
+  expect(
+    Object.keys((await page.evaluate(() => petState())).memory),
+  ).toHaveLength(2);
+  await page.screenshot({ path: "/tmp/pet-memory.png" });
+  await page
+    .getByRole("button", { name: "Удалить воспоминание: место 450" })
+    .click();
+  expect(
+    Object.keys((await page.evaluate(() => petState())).memory),
+  ).toHaveLength(1);
+  await page.locator("#forget-all").click();
+  expect(
+    Object.keys((await page.evaluate(() => petState())).memory),
+  ).toHaveLength(0);
+  await page.locator("#close-memory").click();
+  await page.waitForFunction(() => !petState().paused);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator("#open-memory").click();
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(390);
+  await page.screenshot({ path: "/tmp/pet-memory-mobile.png" });
+});
