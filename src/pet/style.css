@@ -469,4 +469,50 @@ progress.low::-moz-progress-bar {
   max-width: 100%;
 }
 
-#wall-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+#wall-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.development {
+  margin-top: 18px;
+  padding: 18px;
+  border-radius: 18px;
+  background: #fffaf0;
+}
+.development p {
+  font-size: 12px;
+  line-height: 1.6;
+  color: #788270;
+}
+#skills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+}
+#skills span {
+  border-radius: 12px;
+  background: #e6eadc;
+  padding: 8px 12px;
+}
+.header-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+@media (max-width: 600px) {
+  header {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .brand {
+    flex-shrink: 0;
+  }
+  .header-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}

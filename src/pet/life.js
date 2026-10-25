@@ -1,4 +1,15 @@
+export const SKILLS = {
+  walk: "Ходьба",
+  observe: "Исследование",
+  eat: "Еда",
+  drink: "Питьё",
+  climb: "Лесенка",
+  wheel: "Колесо",
+  dig: "Копание",
+};
 export const ACTIVITIES = {
+  newborn: "Только родился",
+  learn: "Учится новому",
   walk: "Гуляет по клетке",
   sniff: "Нюхает опилки",
   groom: "Умывает мордочку",
@@ -24,15 +35,17 @@ export function createPet() {
     level: 0,
     climbing: false,
     facing: 1,
-    activity: "walk",
+    activity: "newborn",
     next: "observe",
     timer: 0,
     age: 0,
+    awakeTime: 0,
+    skills: Object.fromEntries(Object.keys(SKILLS).map((key) => [key, 0])),
     visits: 0,
     food: 75,
     water: 75,
     energy: 85,
-    reason: "Хочу осмотреть клетку.",
+    reason: "Я только появился. Всё вокруг незнакомое.",
     held: false,
     falling: false,
     velocity: 0,
@@ -404,6 +417,43 @@ export function updatePet(p, dt, random = Math.random) {
     }
     return p;
   }
+  p.awakeTime += dt;
+  if (p.skills.walk < 100 || p.skills.observe < 100) {
+    p.food = clamp(p.food - dt * 0.12);
+    p.water = clamp(p.water - dt * 0.16);
+    if (p.awakeTime < 6) {
+      p.activity = "newborn";
+      p.reason = "Пока только прислушиваюсь. Ещё ничего не умею.";
+    } else if (p.skills.walk < 100) {
+      p.activity = "learn";
+      learnSkill(p, "walk", dt, 8, "Пробую переставлять лапки. Учусь ходить.");
+      const x = p.x + Math.sin(p.awakeTime * 2) * dt * 8;
+      if (
+        x >= 80 &&
+        x <= (p.level ? 550 : 820) &&
+        !blockedSegment(p, p.x, p.y, x, p.y)
+      )
+        p.x = x;
+    } else {
+      p.activity = "learn";
+      learnSkill(
+        p,
+        "observe",
+        dt,
+        8,
+        "Учусь различать запахи и запоминать места.",
+      );
+      if (p.skills.observe === 100) {
+        p.activity = "walk";
+        p.next = "observe";
+        p.source = "drops";
+        p.target = p.sites.find((s) => s.id === "drops").x;
+        p.targetY = p.sites.find((s) => s.id === "drops").y ?? 578;
+        p.reason = "Теперь умею ходить и замечать новое. Пойду изучать клетку!";
+      }
+    }
+    return p;
+  }
   p.food = clamp(p.food - dt * 0.36);
   p.water = clamp(p.water - dt * (p.activity === "wheel" ? 0.85 : 0.48));
   p.energy = clamp(
@@ -464,6 +514,16 @@ export function updatePet(p, dt, random = Math.random) {
         return p;
       }
       if (p.level !== Number(upper)) {
+        if (
+          !learnSkill(
+            p,
+            "climb",
+            dt,
+            8,
+            "Учусь держаться на лесенке. Осторожно, лапка за лапкой.",
+          )
+        )
+          return p;
         p.climbing = true;
         return p;
       }
@@ -501,6 +561,18 @@ export function updatePet(p, dt, random = Math.random) {
       return p;
     }
     if (p.activity === "dig") {
+      if (
+        !learnSkill(
+          p,
+          "dig",
+          dt,
+          12,
+          "Не умею копать. Пробую разгребать опилки лапками…",
+        )
+      ) {
+        p.timer = 6;
+        return p;
+      }
       p.y = Math.min(626, p.y + dt * 18);
       if (p.timer <= 0) {
         p.food = clamp(p.food + 35);
@@ -545,7 +617,34 @@ export function updatePet(p, dt, random = Math.random) {
       else seek(p, p.goal);
       return p;
     }
+    if (
+      p.activity === "wheel" &&
+      !learnSkill(
+        p,
+        "wheel",
+        dt,
+        8,
+        "Разбираюсь, как шагать в колесе. Пока получается неловко.",
+      )
+    ) {
+      p.timer = 5;
+      return p;
+    }
     if (p.activity === "eat" || p.activity === "drink") {
+      if (
+        !learnSkill(
+          p,
+          p.activity,
+          dt,
+          5,
+          p.activity === "eat"
+            ? "Учусь брать и грызть еду."
+            : "Учусь пить маленькими глотками.",
+        )
+      ) {
+        p.timer = 4;
+        return p;
+      }
       const kind = p.activity === "eat" ? "food" : "water",
         site = memoryPlaces(p).find((s) => s.id === p.source);
       const stock = p.source?.startsWith("main")
@@ -753,4 +852,14 @@ export function addWall(p, x, upper) {
 }
 export function removeWall(p, id) {
   p.walls = p.walls.filter((w) => w.id !== id);
+}
+
+function learnSkill(p, key, dt, seconds, reason) {
+  if (p.skills[key] >= 100) return true;
+  p.skills[key] = clamp(p.skills[key] + (dt * 100) / seconds);
+  p.reason =
+    p.skills[key] >= 100
+      ? "Получилось! Освоил: " + SKILLS[key].toLowerCase() + "."
+      : reason;
+  return false;
 }

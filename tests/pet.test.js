@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  createPet,
+  createPet as createNewborn,
   addWall,
   removeWall,
   reachable,
@@ -17,6 +17,13 @@ import {
   editMemory,
   forgetMemory,
 } from "../src/pet/life.js";
+// Existing behavior scenarios exercise an experienced hamster.
+function createPet() {
+  const p = createNewborn();
+  for (const key of Object.keys(p.skills)) p.skills[key] = 100;
+  p.activity = "walk";
+  return p;
+}
 test("hamster walks by itself, arrives without overshoot, and stays inside its cage", () => {
   const pet = createPet();
   const x = pet.x;
@@ -343,4 +350,44 @@ test("a wall added at the foot of the ramp does not trap a food-seeking hamster"
   for (let i = 0; i < 250 && !p.wormsFound; i++) updatePet(p, 0.1, () => 0.4);
   assert.equal(p.wormsFound, 1);
   assert.ok(p.x < 690);
+});
+
+test("newborn has no skills or memories and initially stays still", () => {
+  const p = createNewborn(),
+    x = p.x;
+  assert.ok(Object.values(p.skills).every((v) => v === 0));
+  for (let i = 0; i < 50; i++) updatePet(p, 0.1);
+  assert.equal(p.activity, "newborn");
+  assert.equal(p.x, x);
+  assert.deepEqual(p.memory, {});
+  assert.equal(p.wormsFound, 0);
+});
+test("basic skills develop gradually, while carrying freezes practice", () => {
+  const p = createNewborn();
+  for (let i = 0; i < 100; i++) updatePet(p, 0.1);
+  assert.ok(p.skills.walk > 0 && p.skills.walk < 100);
+  assert.equal(p.skills.observe, 0);
+  const skills = structuredClone(p.skills);
+  holdPet(p, 200, 200);
+  for (let i = 0; i < 100; i++) updatePet(p, 0.1);
+  assert.deepEqual(p.skills, skills);
+  releasePet(p);
+  for (let i = 0; i < 200; i++) updatePet(p, 0.1);
+  assert.equal(p.skills.walk, 100);
+  assert.equal(p.skills.observe, 100);
+  assert.equal(p.skills.dig, 0);
+});
+test("inexperienced hamster practices digging before getting any worms", () => {
+  const p = createPet();
+  p.skills.dig = 0;
+  p.food = 30;
+  updatePet(p, 0.1);
+  addWall(p, 450, false);
+  for (let i = 0; i < 80; i++) updatePet(p, 0.1, () => 0.4);
+  assert.ok(p.skills.dig > 0 && p.skills.dig < 100);
+  assert.equal(p.wormsFound, 0);
+  assert.equal(p.y, 578);
+  for (let i = 0; i < 150; i++) updatePet(p, 0.1, () => 0.4);
+  assert.equal(p.skills.dig, 100);
+  assert.ok(p.wormsFound > 0);
 });

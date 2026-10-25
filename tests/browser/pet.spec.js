@@ -132,7 +132,7 @@ test("hamster writes its own memory without editing and the player can change it
       petState().memory.drops &&
       !petState().memory.drops.injected,
     null,
-    { timeout: 15000 },
+    { timeout: 45000 },
   );
   await page.locator("#open-memory").click();
   await expect(page.locator("#memory-list")).toContainText("Сам узнал");
@@ -231,4 +231,36 @@ test("wall tools add and erase barriers on both floors", async ({ page }) => {
   expect((await page.evaluate(() => petState())).walls).toHaveLength(0);
   await page.locator("#cage-editor summary").click();
   await page.waitForFunction(() => !petState().paused);
+});
+
+test("restart resets learning, memory, supplies, walls and furniture", async ({
+  page,
+}) => {
+  await page.goto("/my-game/pet.html");
+  await page.waitForFunction(
+    () => window.petState && petState().skills.walk > 0,
+  );
+  await page.locator("#cage-editor summary").click();
+  await page.locator("#cage-item").selectOption("drink");
+  await page.locator("#cage-floor").selectOption("1");
+  await page.locator("#empty-all").click();
+  await page.locator("#cage-tool").selectOption("wall");
+  await page.locator("#cage-x").fill("450");
+  await page.locator("#place-wall").click();
+  await page.locator("#open-memory").click();
+  await page.getByRole("button", { name: "Записать воспоминание" }).click();
+  await page.locator("#close-memory").click();
+  await Promise.all([
+    page.waitForEvent("load"),
+    page.locator("#restart").click(),
+  ]);
+  const p = await page.evaluate(() => petState());
+  expect(Object.values(p.skills).every((v) => v === 0)).toBe(true);
+  expect(p.memory).toEqual({});
+  expect(p.walls).toEqual([]);
+  expect(p.supplies).toEqual({ food: 60, water: 70 });
+  expect(p.furniture.drink).toEqual({ x: 787, y: 578 });
+  expect(p.activity).toBe("newborn");
+  expect(p.paused).toBe(false);
+  await expect(page.locator("#cage-editor")).not.toHaveAttribute("open", "");
 });
