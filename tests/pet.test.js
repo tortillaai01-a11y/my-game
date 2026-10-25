@@ -56,7 +56,7 @@ test("dragging clamps to cage, suspends eating, and resumes after landing", () =
   assert.equal(p.x, 820);
   assert.equal(p.y, 167);
   updatePet(p, 0.1);
-  assert.ok(p.food < 30);
+  assert.equal(p.food, 30);
   moveHeldPet(p, 200, 220);
   releasePet(p);
   assert.equal(p.falling, true);
@@ -64,4 +64,56 @@ test("dragging clamps to cage, suspends eating, and resumes after landing", () =
   assert.equal(p.held, false);
   assert.equal(p.falling, false);
   assert.equal(p.y, 398);
+});
+
+test("carrying preserves exact need values, destination and intention through landing", () => {
+  const p = { ...createPet(), water: 10 };
+  updatePet(p, 0.1);
+  const goal = p.goal,
+    target = p.target,
+    water = p.water,
+    food = p.food,
+    reason = p.reason;
+  holdPet(p, 200, 200);
+  for (let i = 0; i < 100; i++) updatePet(p, 0.1);
+  assert.equal(p.water, water);
+  assert.equal(p.food, food);
+  assert.equal(p.goal, goal);
+  releasePet(p);
+  while (p.falling) updatePet(p, 0.1);
+  assert.equal(p.water, water);
+  assert.equal(p.goal, goal);
+  assert.equal(p.target, target);
+  assert.equal(p.next, "drink");
+  assert.equal(p.reason, reason);
+  assert.equal(p.activity, "walk");
+});
+test("food and water are finite; recovery consumes the actual available stock", () => {
+  const p = {
+    ...createPet(),
+    activity: "eat",
+    goal: "eat",
+    source: "main",
+    food: 20,
+    x: 640,
+  };
+  p.supplies.food = 0.5;
+  updatePet(p, 0.1);
+  assert.equal(p.supplies.food, 0);
+  assert.ok(Math.abs(p.food - (20 - 0.036 + 0.5)) < 1e-8);
+  assert.equal(p.goal, "eat");
+  assert.equal(p.next, "search");
+});
+test("empty stations lead to exploration and learned sources sustain the hamster", () => {
+  const p = { ...createPet(), food: 25, water: 20 };
+  p.supplies = { food: 0, water: 0 };
+  for (let i = 0; i < 9000; i++) updatePet(p, 0.1, () => 0.4);
+  assert.ok(p.discoveries >= 2);
+  assert.ok(Object.values(p.memory).some((m) => m.finds > 1));
+  assert.ok(p.food > 5);
+  assert.ok(p.water > 5);
+  assert.equal(p.supplies.food, 0);
+  assert.equal(p.supplies.water, 0);
+  for (const site of p.sites)
+    assert.ok(site.stock >= 0 && site.stock <= site.capacity);
 });

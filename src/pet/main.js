@@ -11,8 +11,8 @@ document.querySelector("#app").innerHTML = `
 <main class="shell"><header><div class="brand"><div class="logo">🐹</div><div><h1>Хома дома</h1><div class="tag">МАЛЕНЬКАЯ ЖИЗНЬ РЯДОМ</div></div></div><button class="quiet" id="pause">Ⅱ Пауза</button></header>
 <section class="intro"><div><div class="eyebrow">ЗНАКОМЬСЯ, ЭТО ХОМА</div><h2>У него свои маленькие дела.</h2><p>Он сам выбирает, куда пойти. Возьми Хому мышью или пальцем и перенеси внутри клетки.</p></div><div class="live"><span class="dot"></span><span id="live">Жизнь идёт</span></div></section>
 <div class="habitat"><canvas id="cage" width="900" height="510" role="img" aria-label="Двумерная клетка: Хома самостоятельно гуляет, ест, пьёт, бегает в колесе и отдыхает."></canvas><div class="paused" id="overlay" hidden><span>Тихая пауза ☁</span></div></div>
-<section class="needs"><div><label for="food">Сытость <b id="food-number">75%</b></label><progress id="food" max="100" value="75"></progress></div><div><label for="water">Запас воды <b id="water-number">75%</b></label><progress id="water" max="100" value="75"></progress></div></section><section class="cards"><div class="card"><span class="label">Сейчас у Хомы</span><strong class="value status" id="activity">Гуляет по клетке</strong><small id="thought">Столько всего интересного!</small></div><div class="card"><span class="label">Характер</span><strong class="value">Любопытный</strong><small>Сам следит за едой и водой</small></div><div class="card"><span class="label">Время вместе</span><strong class="value time" id="time">00:00</strong><small>Никуда не спешим</small></div></section>
-<footer><span>Хома выбирает занятия по своим потребностям. Перетаскивай его внутри клетки.</span><a href="./index.html">Другие игры ↗</a></footer></main>`;
+<section class="needs"><div><label for="food">Сытость <b id="food-number">75%</b></label><progress id="food" max="100" value="75"></progress></div><div><label for="water">Запас воды <b id="water-number">75%</b></label><progress id="water" max="100" value="75"></progress></div></section><section class="cards"><div class="card"><span class="label">Сейчас у Хомы</span><strong class="value status" id="activity">Гуляет по клетке</strong><small id="thought">Столько всего интересного!</small></div><div class="card"><span class="label">Память Хомы</span><strong class="value" id="memory">Изучает клетку</strong><small id="stocks">Корм: 60 · вода: 70</small></div><div class="card"><span class="label">Время вместе</span><strong class="value time" id="time">00:00</strong><small>Никуда не спешим</small></div></section>
+<footer><span>При переносе Хома помнит своё намерение. Если припасы кончатся, он ищет крошки, ростки и капли воды.</span><a href="./index.html">Другие игры ↗</a></footer></main>`;
 const canvas = document.querySelector("#cage"),
   ctx = canvas.getContext("2d"),
   pet = createPet();
@@ -173,12 +173,19 @@ function bowls() {
   round(603, 376, 77, 23, 10, "#b88265");
   ellipse(642, 377, 39, 12, "#e5b591");
   ellipse(642, 377, 32, 8, "#93704b");
-  for (const g of grain)
+  for (const g of grain.slice(0, Math.ceil((22 * pet.supplies.food) / 60)))
     ellipse(g.x, g.y, 3.5, 2, g.c > 0.5 ? "#e5c68b" : "#ba984f");
   // Glass water bottle with a metal drinking spout.
   round(741, 176, 40, 109, 17, "#b7cdd0");
   round(746, 190, 30, 88, 12, "#d7e9e1");
-  round(746, 216, 30, 62, 10, "#9fc8ca");
+  round(
+    746,
+    278 - (62 * pet.supplies.water) / 70,
+    30,
+    (62 * pet.supplies.water) / 70,
+    3,
+    "#9fc8ca",
+  );
   round(748, 194, 6, 67, 3, "#f4ffed99");
   round(741, 171, 40, 14, 4, "#8a9f94");
   line(762, 285, 762, 356, "#8a9894", 6);
@@ -268,6 +275,31 @@ function draw() {
     round(0, 0, b.l, 2, 1, b.c > 0.5 ? "#ecd5a6" : "#bd9c6b66");
     ctx.restore();
   }
+  for (const site of pet.sites) {
+    if (site.kind === "food" && site.id === "sprouts") {
+      for (let i = 0; i < 5; i++) {
+        const h = 4 + (site.stock / site.capacity) * 16;
+        line(
+          site.x - 16 + i * 8,
+          396,
+          site.x - 17 + i * 8,
+          396 - h,
+          "#85986b",
+          2,
+        );
+        ellipse(site.x - 14 + i * 8, 396 - h, 4, 2, "#a5b97d");
+      }
+    } else if (site.stock > 1) {
+      for (let i = 0; i < Math.min(5, Math.ceil(site.stock / 4)); i++)
+        ellipse(
+          site.x - 12 + i * 6,
+          401 + (i % 2) * 3,
+          site.kind === "water" ? 2 : 3,
+          2,
+          site.kind === "water" ? "#9abfc4" : "#d8ad66",
+        );
+    }
+  }
   house();
   wheel();
   bowls();
@@ -310,6 +342,14 @@ function frame(now) {
     lastActivity = pet.activity;
     document.querySelector("#activity").textContent = ACTIVITIES[pet.activity];
     document.querySelector("#thought").textContent = pet.reason;
+    document.querySelector("#memory").textContent = pet.discoveries
+      ? "Помнит мест: " + pet.discoveries
+      : "Изучает клетку";
+    document.querySelector("#stocks").textContent =
+      "Корм: " +
+      Math.ceil(pet.supplies.food) +
+      " · вода: " +
+      Math.ceil(pet.supplies.water);
     for (const [key, value] of [
       ["food", pet.food],
       ["water", pet.water],
@@ -383,4 +423,4 @@ for (const name of ["pointerup", "pointercancel", "lostpointercapture"])
 window.addEventListener("blur", () => setPause(true));
 resize();
 requestAnimationFrame(frame);
-window.petState = () => ({ ...pet, paused });
+window.petState = () => structuredClone({ ...pet, paused });

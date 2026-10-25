@@ -42,6 +42,12 @@ test("mouse and touch can carry the hamster within the cage and release it", asy
   await page.waitForFunction(() => petState().held);
   await page.mouse.move(end.x, end.y, { steps: 5 });
   const held = await page.evaluate(() => petState());
+  await page.waitForTimeout(300);
+  const stillHeld = await page.evaluate(() => petState());
+  expect(stillHeld.food).toBe(held.food);
+  expect(stillHeld.water).toBe(held.water);
+  expect(stillHeld.goal).toBe(held.goal);
+  expect(stillHeld.target).toBe(held.target);
   expect(held.x).toBeGreaterThan(650);
   expect(held.y).toBeLessThan(300);
   await page.screenshot({ path: "/tmp/pet-held.png" });
