@@ -2,16 +2,29 @@ import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { MovementInput } from "../simulator/controls.js";
 import { surfaceTexture, batchStatic } from "../simulator/visuals.js";
-import { TYPES, emptyCargo, validCargo, canStand, transfer } from "./model.js";
+import {
+  TYPES,
+  YARD_TYPES,
+  PRICES,
+  RECIPES,
+  buy,
+  assemble,
+  launchChance,
+  launch,
+  emptyCargo,
+  validCargo,
+  canStand,
+  transfer,
+} from "./model.js";
 import "./style.css";
 
 const $ = (id) => document.getElementById(id);
 document.querySelector("#app").innerHTML = `
-<div id="hud"><header><div class="brand">ДО ОРБИТЫ<small>БОЛЬШОЕ НАЧИНАЕТСЯ С МАЛОГО</small></div><div class="top-actions"><button id="bag">Рюкзак · I</button><button id="pause">Ⅱ</button></div></header>
+<div id="hud"><header><div class="brand">ДО ОРБИТЫ<small>БОЛЬШОЕ НАЧИНАЕТСЯ С МАЛОГО</small></div><div class="top-actions"><button id="wallet">0 ₽</button><button id="bag">Рюкзак · I</button><button id="pause">Ⅱ</button></div></header>
 <div class="location"><small>ТВОЙ УЧАСТОК / 01</small><strong id="place">Дом</strong><p id="place-note">За дверью — целый мир ненужных вещей. Возможно, не таких уж ненужных.</p></div>
 <div id="crosshair"></div><div id="prompt"></div><div id="toast"></div><div class="bottom"><div class="cargo"><small>СОБРАНО В РЮКЗАК</small><strong id="count">0 предметов</strong></div><div class="help">WASD — идти · SHIFT — бежать · МЫШЬ — осмотреться<br>E — взять / сложить · I — рюкзак · ESC — пауза</div></div></div>
-<div id="inventory" hidden><button id="close-inventory">×</button><h2>Твои находки</h2><p>Рюкзак / запас в гараже. Подойди к верстаку, чтобы разгрузиться.</p><ul id="items"></ul><p>Здесь будут детали будущей космической ракеты. Её сборка появится на следующем этапе.</p></div>
-<div id="menu"><div class="panel"><div class="eyebrow">ГЛАВА 01 · ПОКА МЫ НА ЗЕМЛЕ</div><h1>До<br><span>орбиты.</span></h1><p>Дом. Старый гараж. Мусорка за дорогой.<br>Всё необходимое, чтобы однажды построить космическую ракету из того, что другие выбросили.</p><button class="primary" id="start">Выйти навстречу идее →</button><a href="./index.html">К хомячьей жизни</a><div class="controls-note">Начни с прогулки. Собирай вещи на мусорке и складывай их в гараже.<br>WASD + мышь · E — взаимодействовать · I — рюкзак<br>Прогресс сохраняется в этом браузере.</div></div></div>
+<div id="inventory" hidden><button id="close-inventory">×</button><h2>Твои находки</h2><p>Рюкзак / запас в гараже. Подойди к верстаку, чтобы разгрузиться.</p><ul id="items"></ul><p>Здесь будут детали будущей космической ракеты. Собирай ракету на верстаке. Более качественные детали повышают шанс взлёта.</p></div>
+<div id="menu"><div class="panel"><div class="eyebrow">ГЛАВА 01 · ПОКА МЫ НА ЗЕМЛЕ</div><h1>До<br><span>орбиты.</span></h1><p>Дом. Старый гараж. Мусорка за дорогой.<br>Всё необходимое, чтобы однажды построить космическую ракету из того, что другие выбросили.</p><button class="primary" id="start">Выйти навстречу идее →</button><a href="./index.html">К хомячьей жизни</a><div class="controls-note">Мусорка → работа → магазин → гараж → запуск. На карте появились магазин слева от дома и работа справа от мусорки.<br>WASD + мышь · E — взаимодействовать · I — рюкзак<br>Прогресс сохраняется в этом браузере.</div></div></div>
 <div id="touch"><div class="pad"><span></span><button data-key="KeyW">↑</button><span></span><button data-key="KeyA">←</button><button data-key="KeyS">↓</button><button data-key="KeyD">→</button></div><button id="touch-use">E</button></div>`;
 const scene = new THREE.Scene();
 scene.background = new THREE.Color("#bbc8c4");
@@ -26,6 +39,10 @@ renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.shadowMap.autoUpdate = false;
 renderer.shadowMap.needsUpdate = true;
 document.querySelector("#app").prepend(renderer.domElement);
+const activityPanel = document.createElement("div");
+activityPanel.id = "activity-panel";
+activityPanel.hidden = true;
+document.body.append(activityPanel);
 renderer.domElement.tabIndex = 0;
 const camera = new THREE.PerspectiveCamera(
   68,
@@ -123,7 +140,7 @@ box(100, 0.2, 85, M.grass, 0, -0.18, -17);
 box(12, 0.04, 55, M.dirt, 0, -0.05, -13);
 box(37, 0.04, 5, M.dirt, 11, -0.03, -4);
 box(39, 0.08, 31, M.dirt, 0, -0.03, -33);
-function building(x, z, w, d, garage = false) {
+function building(x, z, w, d, garage = false, title = "ГАРАЖ / МАСТЕРСКАЯ") {
   box(w, 0.16, d, M.concrete, x, -0.02, z);
   box(0.25, 3.5, d, M.wall, x - w / 2, 1.75, z, world, true);
   box(0.25, 3.5, d, M.wall, x + w / 2, 1.75, z, world, true);
@@ -144,8 +161,7 @@ function building(x, z, w, d, garage = false) {
   box(door, 0.5, 0.25, M.wall, x, 3.25, z - d / 2);
   box(w + 0.6, 0.25, d + 0.6, M.roof, x, 3.65, z);
   if (garage) {
-    label("ГАРАЖ / МАСТЕРСКАЯ", x, 3, z - d / 2 - 0.16, 4.7, 0.6).rotation.y =
-      Math.PI;
+    label(title, x, 3, z - d / 2 - 0.16, 4.7, 0.6).rotation.y = Math.PI;
   } else {
     label("ДОМ", x, 3, z - d / 2 - 0.16, 1.6, 0.5).rotation.y = Math.PI;
     box(2.2, 0.45, 3.6, M.wood, x - 2.8, 0.25, z + 2, world, true);
@@ -182,6 +198,21 @@ for (let i = 0; i < 3; i++) {
   box(0.12, 2.5, 0.8, M.metal, 18.7, 1.25, 8);
   box(0.12, 2.5, 0.8, M.metal, 20.9, 1.25, 8);
 }
+// Two new destinations with open entrances facing the main path.
+building(-16, 6, 10, 10, true, "МАГАЗИН · ВСЕ ДЕТАЛИ");
+building(32, -9, 10, 10, true, "РАБОТА · СОРТИРОВОЧНЫЙ ЦЕХ");
+box(3.5, 1, 1, M.wood, -16, 0.5, 9, world, true);
+box(3.5, 1, 1, M.metal, 32, 0.5, -6, world, true);
+for (let i = 0; i < 5; i++) {
+  box(0.6, 0.5, 0.6, M.orange, 30 + i, 1.3, -5.7);
+  box(0.6, 0.5, 0.5, i % 2 ? M.metal : M.rust, -18 + i, 1.4, 9);
+}
+box(38, 0.04, 4, M.dirt, 18, -0.02, -15);
+box(32, 0.04, 4, M.dirt, -9, -0.02, -2);
+label("← МАГАЗИН     РАБОТА →", 0, 2, -12, 6, 0.7);
+box(0.12, 2, 0.12, M.wood, 0, 1, -12.1);
+const launchPad = box(6, 0.12, 6, M.concrete, 26, 0.04, 7);
+label("СТАРТОВАЯ ПЛОЩАДКА", 26, 0.12, 7, 4, 0.6).rotation.x = -Math.PI / 2;
 const benchTarget = box(
   4,
   0.7,
@@ -193,6 +224,24 @@ const benchTarget = box(
   scene,
 );
 benchTarget.userData.storage = true;
+const stations = [benchTarget];
+for (const [kind, x, z] of [
+  ["shop", -16, 8.8],
+  ["work", 32, -6.2],
+]) {
+  const target = box(
+    3.5,
+    1.6,
+    1.2,
+    new THREE.MeshBasicMaterial({ visible: false }),
+    x,
+    1,
+    z,
+    scene,
+  );
+  target.userData.station = kind;
+  stations.push(target);
+}
 label("МУСОРКА ↑", 3, 1.9, -6, 3, 0.65);
 box(0.12, 2.1, 0.12, M.wood, 3, 1, -6.05);
 label("← ДОМ     ГАРАЖ →", 7, 1.7, -1, 4, 0.65);
@@ -322,7 +371,9 @@ function makeItem(type, index) {
   return g;
 }
 for (let i = 0; i < 160; i++) {
-  const typeIndex = i % TYPES.length,
+  const typeIndex = TYPES.findIndex(
+      (t) => t.id === YARD_TYPES[i % YARD_TYPES.length],
+    ),
     type = TYPES[typeIndex],
     g = makeItem(type, typeIndex);
   let x, z;
@@ -353,6 +404,24 @@ if (
   canStand(...restored.position, solids)
 )
   camera.position.set(restored.position[0], 1.65, restored.position[1]);
+let money = Number.isSafeInteger(restored?.money)
+  ? Math.max(0, restored.money)
+  : 0;
+let rocket = {};
+for (const key of ["hull", "engine", "tank", "control"])
+  if (restored?.rocket?.[key] === 0 || restored?.rocket?.[key] === 1)
+    rocket[key] = restored.rocket[key];
+let flights = Number.isSafeInteger(restored?.flights)
+  ? Math.max(0, restored.flights)
+  : 0;
+let failures = Number.isSafeInteger(restored?.failures)
+  ? Math.max(0, restored.failures)
+  : 0;
+let panelKind = null,
+  workRemaining = 0,
+  flight = null,
+  rocketVisual = null;
+let closingLock = false;
 if (Number.isFinite(restored?.yaw)) yaw = restored.yaw;
 if (Number.isFinite(restored?.pitch))
   pitch = THREE.MathUtils.clamp(restored.pitch, -1.35, 1.35);
@@ -361,6 +430,7 @@ const input = new MovementInput(),
 raycaster.far = 3.2;
 const total = (obj) => Object.values(obj).reduce((a, b) => a + b, 0);
 function updateInventory() {
+  $("wallet").textContent = money + " ₽";
   $("count").textContent = total(cargo) + " предметов";
   $("items").innerHTML = TYPES.map(
     (t) =>
@@ -374,6 +444,10 @@ function save() {
       JSON.stringify({
         cargo,
         storage,
+        money,
+        rocket,
+        flights,
+        failures,
         collected: [...collected],
         position: [camera.position.x, camera.position.z],
         yaw,
@@ -391,6 +465,7 @@ function notify(text) {
 }
 function pause() {
   paused = true;
+  if (panelKind) closePanel();
   input.clear();
   $("menu").hidden = false;
   $("start").textContent = "Продолжить прогулку →";
@@ -421,14 +496,20 @@ $("close-inventory").onclick = () => {
 };
 function interact() {
   if (paused || !nearest) return;
+  if (nearest.userData.station) {
+    openPanel(nearest.userData.station);
+    return;
+  }
   if (nearest.userData.storage) {
-    if (!total(cargo)) {
-      notify("Рюкзак пуст. На мусорке полно полезных вещей.");
-      return;
+    if (total(cargo)) {
+      const moved = total(cargo);
+      ({ cargo, storage } = transfer(cargo, storage));
+      notify("В гараж сложено: " + moved);
+      updateInventory();
+      save();
     }
-    const moved = total(cargo);
-    ({ cargo, storage } = transfer(cargo, storage));
-    notify("В гараж сложено: " + moved);
+    openPanel("build");
+    return;
   } else {
     const { pickup, type, name } = nearest.userData;
     if (collected.has(pickup)) return;
@@ -461,10 +542,14 @@ window.addEventListener("keydown", (e) => {
   )
     e.preventDefault();
   if (e.code === "Escape") {
+    if (panelKind) {
+      closePanel();
+      return;
+    }
     pause();
     return;
   }
-  if (paused) return;
+  if (paused || panelKind) return;
   input.press(e.code, e.repeat);
   if (!e.repeat && e.code === "KeyE") interact();
   if (!e.repeat && e.code === "KeyI") toggleInventory();
@@ -476,21 +561,33 @@ document.addEventListener("visibilitychange", () => {
 });
 window.addEventListener("pagehide", save);
 document.addEventListener("pointerlockchange", () => {
-  if (!document.pointerLockElement && !touch && !paused) pause();
+  if (
+    !document.pointerLockElement &&
+    !touch &&
+    !paused &&
+    !panelKind &&
+    !closingLock
+  )
+    pause();
 });
 document.addEventListener("mousemove", (e) => {
-  if (paused || document.pointerLockElement !== renderer.domElement) return;
+  if (
+    paused ||
+    panelKind ||
+    document.pointerLockElement !== renderer.domElement
+  )
+    return;
   yaw -= e.movementX * 0.0022;
   pitch = THREE.MathUtils.clamp(pitch - e.movementY * 0.0022, -1.35, 1.35);
 });
 let drag = null;
 renderer.domElement.addEventListener("pointerdown", (e) => {
-  if (paused || document.pointerLockElement) return;
+  if (paused || panelKind || document.pointerLockElement) return;
   drag = { id: e.pointerId, x: e.clientX, y: e.clientY };
   renderer.domElement.setPointerCapture(e.pointerId);
 });
 renderer.domElement.addEventListener("pointermove", (e) => {
-  if (paused || !drag || drag.id !== e.pointerId) return;
+  if (paused || panelKind || !drag || drag.id !== e.pointerId) return;
   yaw -= (e.clientX - drag.x) * 0.005;
   pitch = THREE.MathUtils.clamp(
     pitch - (e.clientY - drag.y) * 0.005,
@@ -522,7 +619,7 @@ window.addEventListener("resize", () => {
 function findTarget() {
   raycaster.setFromCamera(new THREE.Vector2(), camera);
   const hits = raycaster.intersectObjects(
-    [world, benchTarget, ...pickups],
+    [world, ...stations, ...pickups],
     true,
   );
   nearest = null;
@@ -531,24 +628,312 @@ function findTarget() {
     while (
       object &&
       object.userData.pickup === undefined &&
-      !object.userData.storage
+      !object.userData.storage &&
+      !object.userData.station
     )
       object = object.parent;
     if (object) nearest = object;
   }
   $("prompt").innerHTML = nearest
-    ? `<kbd>E</kbd>${nearest.userData.storage ? "Сложить находки в гараже" : "Взять · " + nearest.userData.name}`
+    ? `<kbd>E</kbd>${nearest.userData.storage ? "Верстак · разгрузить и собрать ракету" : nearest.userData.station === "shop" ? "Магазин" : nearest.userData.station === "work" ? "Работа" : "Взять · " + nearest.userData.name}`
     : "";
 }
+function recipeText(cost) {
+  return Object.entries(cost)
+    .map(([id, n]) => TYPES.find((t) => t.id === id).name + " ×" + n)
+    .join(", ");
+}
+function renderPanel() {
+  if (!panelKind) return;
+  let content = "";
+  if (panelKind === "shop")
+    content =
+      "<h2>Магазин деталей</h2><p>Всё для будущей ракеты. Покупки — в рюкзак.</p>" +
+      TYPES.map(
+        (t) =>
+          '<div class="shop-row"><span>' +
+          t.name +
+          "<small>В рюкзаке: " +
+          cargo[t.id] +
+          '</small></span><button data-buy="' +
+          t.id +
+          '" ' +
+          (money < PRICES[t.id] ? "disabled" : "") +
+          ">" +
+          PRICES[t.id] +
+          " ₽</button></div>",
+      ).join("");
+  if (panelKind === "work")
+    content =
+      '<h2>Сортировочный цех</h2><p>Помоги разобрать посылки: смена длится 15 секунд активной игры. Оплата — 60 ₽. Оставайся у рабочего стола до конца смены.</p><div id="work-progress"></div><button id="work-start" ' +
+      (workRemaining > 0 ? "disabled" : "") +
+      ">Начать смену · 60 ₽</button>";
+  if (panelKind === "build") {
+    const chance = launchChance(rocket);
+    content =
+      "<h2>Сборка ракеты</h2><p>Вещи из рюкзака сложены на склад. Нужны корпус, двигатель, бак с топливом и управление. Установленную деталь можно снять с возвратом материалов.</p>" +
+      RECIPES.map((r) => {
+        const installed = rocket[r.slot] !== undefined;
+        const selected = rocket[r.slot] === r.quality;
+        const enough = Object.entries(r.cost).every(
+          ([id, n]) => storage[id] >= n,
+        );
+        return (
+          '<div class="shop-row"><span>' +
+          r.title +
+          "<small>" +
+          recipeText(r.cost) +
+          '</small></span><button data-build="' +
+          r.id +
+          '" ' +
+          (installed || !enough || flight ? "disabled" : "") +
+          ">" +
+          (installed ? (selected ? "Установлено" : "Занято") : "Собрать") +
+          "</button></div>"
+        );
+      }).join("") +
+      '<div class="parts">' +
+      ["hull", "engine", "tank", "control"]
+        .filter((key) => rocket[key] !== undefined)
+        .map(
+          (key) =>
+            '<button data-remove="' +
+            key +
+            '" ' +
+            (flight ? "disabled" : "") +
+            ">Снять: " +
+            {
+              hull: "корпус",
+              engine: "двигатель",
+              tank: "бак",
+              control: "управление",
+            }[key] +
+            "</button>",
+        )
+        .join("") +
+      "</div>" +
+      "<p><b>" +
+      (chance
+        ? "Шанс взлёта: " + Math.round(chance * 100) + "%"
+        : "Установи все четыре узла для запуска.") +
+      '</b><br>При неудаче двигатель и топливный бак теряются; корпус и управление остаются. После успешного полёта можно собрать новую ракету.</p><button id="launch" ' +
+      (!chance || flight ? "disabled" : "") +
+      ">На старт! 🚀</button><p>Успешных запусков: " +
+      flights +
+      " · неудачных: " +
+      failures +
+      "</p>";
+  }
+  activityPanel.innerHTML =
+    '<button id="close-activity" class="close-panel">×</button><small>НА СЧЕТУ: ' +
+    money +
+    " ₽</small>" +
+    content;
+  $("close-activity").onclick = closePanel;
+  for (const button of activityPanel.querySelectorAll("[data-buy]"))
+    button.onclick = () => {
+      const result = buy(cargo, money, button.dataset.buy);
+      if (result) {
+        ({ cargo, money } = result);
+        updateInventory();
+        save();
+        renderPanel();
+      }
+    };
+  for (const button of activityPanel.querySelectorAll("[data-build]"))
+    button.onclick = () => {
+      if (flight) return;
+      const result = assemble(storage, rocket, button.dataset.build);
+      if (result) {
+        ({ storage, rocket } = result);
+        rebuildRocket();
+        updateInventory();
+        save();
+        renderPanel();
+      }
+    };
+  for (const button of activityPanel.querySelectorAll("[data-remove]"))
+    button.onclick = () => {
+      if (flight) return;
+      const key = button.dataset.remove;
+      const recipe = RECIPES.find(
+        (r) => r.slot === key && r.quality === rocket[key],
+      );
+      if (!recipe) return;
+      for (const [id, n] of Object.entries(recipe.cost)) storage[id] += n;
+      delete rocket[key];
+      rebuildRocket();
+      updateInventory();
+      save();
+      renderPanel();
+    };
+  if ($("work-start"))
+    $("work-start").onclick = () => {
+      if (!workRemaining) {
+        workRemaining = 15;
+        renderPanel();
+      }
+    };
+  if ($("launch")) $("launch").onclick = startLaunch;
+  updateWorkLabel();
+}
+function openPanel(kind) {
+  panelKind = kind;
+  input.clear();
+  $("inventory").hidden = true;
+  activityPanel.hidden = false;
+  if (document.pointerLockElement) document.exitPointerLock();
+  renderPanel();
+}
+function closePanel() {
+  panelKind = null;
+  activityPanel.hidden = true;
+  input.clear();
+  if (workRemaining) {
+    workRemaining = 0;
+    notify("Смена прервана. Оплата — после полной смены.");
+  }
+  if (!paused) {
+    closingLock = true;
+    const request = touch
+      ? Promise.resolve()
+      : renderer.domElement.requestPointerLock();
+    Promise.resolve(request)
+      .catch(() => {})
+      .finally(() => {
+        closingLock = false;
+      });
+  }
+}
+function updateWorkLabel() {
+  if ($("work-progress"))
+    $("work-progress").textContent =
+      workRemaining > 0
+        ? "Разбираем посылки… " + Math.ceil(workRemaining) + " сек."
+        : "Можно начать новую смену.";
+}
+function rebuildRocket() {
+  if (rocketVisual) {
+    rocketVisual.traverse((o) => {
+      if (o.isMesh) {
+        if (o.geometry !== cube) o.geometry.dispose();
+        o.material.dispose();
+      }
+    });
+    scene.remove(rocketVisual);
+  }
+  rocketVisual = new THREE.Group();
+  rocketVisual.position.set(15, 0.2, 5);
+  rocketVisual.scale.setScalar(.68);
+  scene.add(rocketVisual);
+  const shell = mat(
+    rocket.hull === 1 ? "#b4c3c6" : "#b5986b",
+    0.65,
+    rocket.hull === 1 ? 0.7 : 0,
+  );
+  if (rocket.hull !== undefined) {
+    cylinder(0.62, 3.2, shell, 0, 2, 0, rocketVisual);
+    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.62, 1.2, 24), shell);
+    nose.position.y = 4.2;
+    rocketVisual.add(nose);
+    for (let i = 0; i < 4; i++) {
+      const fin = box(
+        0.12,
+        0.8,
+        1.1,
+        shell,
+        Math.sin((i * Math.PI) / 2) * 0.65,
+        0.8,
+        Math.cos((i * Math.PI) / 2) * 0.65,
+        rocketVisual,
+      );
+      fin.rotation.y = (i * Math.PI) / 2;
+    }
+  }
+  if (rocket.engine !== undefined)
+    cylinder(0.4, 0.6, mat("#46575d", 0.4, 0.8), 0, 0.3, 0, rocketVisual);
+  if (rocket.tank !== undefined)
+    cylinder(0.68, 0.4, mat("#c9994b"), 0, 2, 0, rocketVisual);
+  if (rocket.control !== undefined)
+    box(0.3, 0.25, 0.2, mat("#547d79"), 0, 3.25, 0.6, rocketVisual);
+  rocketVisual.traverse((o) => {
+    if (o.isMesh) {
+      o.castShadow = false;
+      o.receiveShadow = true;
+    }
+  });
+}
+function startLaunch() {
+  if (flight) return;
+  const bytes = new Uint32Array(1);
+  crypto.getRandomValues(bytes);
+  const result = launch(rocket, bytes[0] / 4294967296);
+  if (!result) return;
+  // Commit the result before animation: reload cannot reroll or duplicate a rocket.
+  flight = { time: 0, success: result.success };
+  rocket = result.rocket;
+  if (result.success) flights++;
+  else failures++;
+  save();
+  closePanel();
+  camera.position.set(26, 1.65, 13);
+  yaw = 0;
+  pitch = 0.12;
+  rocketVisual.position.set(26, 0.2, 7);
+  rocketVisual.scale.setScalar(1);
+  notify("Обратный отсчёт… 3, 2, 1!");
+}
+function updateActivities(dt, elapsed) {
+  if (workRemaining > 0 && panelKind === "work") {
+    workRemaining = Math.max(0, workRemaining - elapsed);
+    updateWorkLabel();
+    if (workRemaining === 0) {
+      money += 60;
+      notify("Смена завершена: +60 ₽");
+      updateInventory();
+      save();
+      renderPanel();
+    }
+  }
+  if (flight) {
+    flight.time += dt;
+    const elapsed = flight.time;
+    if (elapsed > 3) {
+      if (flight.success) {
+        rocketVisual.position.y = 0.2 + (elapsed - 3) ** 2 * 2;
+        pitch = Math.min(0.85, (elapsed - 3) * 0.15);
+      } else {
+        rocketVisual.rotation.z = Math.min(1.5, (elapsed - 3) * 0.8);
+        rocketVisual.position.y =
+          0.2 +
+          Math.max(0, Math.sin(Math.min(Math.PI, (elapsed - 3) * 1.4)) * 0.6);
+      }
+    }
+    if (elapsed > 7) {
+      const success = flight.success;
+      flight = null;
+      rebuildRocket();
+      notify(
+        success
+          ? "Ракета взлетела! Можно строить следующую."
+          : "Неудачный запуск. Замени двигатель и заправленный бак.",
+      );
+      save();
+    }
+  }
+}
+rebuildRocket();
+
 updateInventory();
 let previous = performance.now(),
   hudTime = 0;
 function frame(now) {
   requestAnimationFrame(frame);
-  const dt = Math.min((now - previous) / 1000, 0.05);
+  const elapsed = (now - previous) / 1000;
+  const dt = Math.min(elapsed, 0.05);
   previous = now;
   if (!paused) {
-    const axes = input.axes(),
+    const axes = panelKind ? { x: 0, z: 0 } : input.axes(),
       speed = input.has("ShiftLeft") || input.has("ShiftRight") ? 6 : 3.5;
     const dx = (axes.x * Math.cos(yaw) + axes.z * Math.sin(yaw)) * speed * dt;
     const dz = (-axes.x * Math.sin(yaw) + axes.z * Math.cos(yaw)) * speed * dt;
@@ -568,22 +953,29 @@ function frame(now) {
       const x = camera.position.x,
         z = camera.position.z;
       const place =
-        z < -18
-          ? "Мусорка"
-          : Math.abs(x) < 5 && z > 1
-            ? "Дом"
-            : x > 9.5 && x < 20.5 && z > 0 && z < 12
-              ? "Гараж"
-              : "Двор";
+        x < -11 && x > -21 && z > 1 && z < 11
+          ? "Магазин"
+          : x > 27 && x < 37 && z > -14 && z < -4
+            ? "Работа"
+            : z < -18
+              ? "Мусорка"
+              : Math.abs(x) < 5 && z > 1
+                ? "Дом"
+                : x > 9.5 && x < 20.5 && z > 0 && z < 12
+                  ? "Гараж"
+                  : "Двор";
       $("place").textContent = place;
       $("place-note").textContent = {
+        Магазин: "Все детали доступны у прилавка. Покупки попадают в рюкзак.",
+        Работа: "У стола можно отработать смену и получить 60 ₽.",
         Дом: "Твоё начало. Дом — позади, космос — впереди.",
         Гараж: "Верстак у дальней стены. Здесь можно сложить находки.",
         Мусорка:
-          "Металлолом, трубы, провода… Подойди, посмотри на вещь и нажми E.",
+          "Только картон, трубы и крепления. Подойди, посмотри на вещь и нажми E.",
         Двор: "Мусорка — по дорожке вперёд. Гараж — справа от дома.",
       }[place];
     }
+    updateActivities(dt, elapsed);
     if (saveTime > 4) {
       saveTime = 0;
       save();
@@ -596,6 +988,13 @@ function frame(now) {
 requestAnimationFrame(frame);
 window.rocketState = () => ({
   paused,
+  money,
+  rocket: { ...rocket },
+  flights,
+  failures,
+  panelKind,
+  workRemaining,
+  flight: flight ? { time: flight.time, success: flight.success } : null,
   position: camera.position.toArray(),
   yaw,
   pitch,

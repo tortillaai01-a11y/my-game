@@ -31,7 +31,7 @@ test("rocket home exit, scrapyard salvage, save and garage storage work", async 
   // snapshot is read-only; interaction still uses the actual scene raycast.
   const item = await page.evaluate(() =>
     rocketState().salvage.find(
-      (o) => o.type === "scrap" && Math.abs(o.position[0]) < 2.5,
+      (o) => o.type === "cardboard" && Math.abs(o.position[0]) < 2.5,
     ),
   );
   expect(item).toBeTruthy();
