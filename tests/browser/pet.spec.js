@@ -204,3 +204,31 @@ test("cage editor moves objects between floors and controls all reserves", async
   await page.locator("#cage-editor summary").click();
   await page.waitForFunction(() => !petState().paused);
 });
+
+test("wall tools add and erase barriers on both floors", async ({ page }) => {
+  await page.goto("/my-game/pet.html");
+  await page.locator("#cage-editor summary").click();
+  await page.locator("#cage-tool").selectOption("wall");
+  await page.locator("#cage-floor").selectOption("0");
+  await page.locator("#cage-x").fill("450");
+  await page.locator("#place-wall").click();
+  expect((await page.evaluate(() => petState())).walls).toHaveLength(1);
+  await page.locator("#cage-floor").selectOption("1");
+  await page.locator("#cage-x").fill("400");
+  await page.locator("#place-wall").click();
+  expect((await page.evaluate(() => petState())).walls).toHaveLength(2);
+  await page.screenshot({ path: "/tmp/pet-walls.png", fullPage: true });
+  await page.locator("#cage-tool").selectOption("erase");
+  const canvas = page.locator("#cage");
+  await canvas.scrollIntoViewIfNeeded();
+  const b = await canvas.boundingBox();
+  await page.mouse.click(
+    b.x + (400 * b.width) / 900,
+    b.y + (200 * b.height) / 690,
+  );
+  expect((await page.evaluate(() => petState())).walls).toHaveLength(1);
+  await page.locator("#clear-walls").click();
+  expect((await page.evaluate(() => petState())).walls).toHaveLength(0);
+  await page.locator("#cage-editor summary").click();
+  await page.waitForFunction(() => !petState().paused);
+});

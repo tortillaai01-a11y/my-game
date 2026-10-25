@@ -1,6 +1,8 @@
 import "./style.css";
 import {
   createPet,
+  addWall,
+  removeWall,
   cageItems,
   moveCageItem,
   setSupply,
@@ -19,8 +21,8 @@ document.querySelector("#app").innerHTML = `
 <main class="shell"><header><div class="brand"><div class="logo">🐹</div><div><h1>Хома дома</h1><div class="tag">МАЛЕНЬКАЯ ЖИЗНЬ РЯДОМ</div></div></div><div class="header-actions"><button class="quiet" id="open-memory">Память</button><button class="quiet" id="pause">Ⅱ Пауза</button></div></header>
 <section class="intro"><div><div class="eyebrow">ЗНАКОМЬСЯ, ЭТО ХОМА</div><h2>У него свои маленькие дела.</h2><p>Он сам выбирает, куда пойти. Хома сам поднимается на второй этаж по лесенке. Возьми Хому мышью или пальцем и перенеси внутри клетки.</p></div><div class="live"><span class="dot"></span><span id="live">Жизнь идёт</span></div></section>
 <div class="habitat"><canvas id="cage" width="900" height="690" role="img" aria-label="Двумерная клетка: Хома самостоятельно гуляет, ест, пьёт, бегает в колесе и отдыхает."></canvas><div class="paused" id="overlay" hidden><span>Тихая пауза ☁</span></div></div>
-<section class="water-controls" aria-label="Запасы воды"><strong id="bottle-stock" aria-live="polite">В поилке: 70 / 70</strong><button class="quiet" id="refill-water">Пополнить воду</button><button class="quiet" id="empty-water">Опустошить поилку</button></section><details id="cage-editor"><summary>⚒ Изменить клетку</summary><p>Выбери предмет и нажми в клетке, чтобы переставить его. Или выбери этаж и положение ниже. Пока редактируешь, Хома отдыхает.</p><div class="editor-fields"><label>Предмет<select id="cage-item"></select></label><label>Этаж<select id="cage-floor"><option value="0">Первый</option><option value="1">Второй</option></select></label><label>Положение<input id="cage-x" type="range" min="150" max="780" value="300"></label></div><div class="water-controls"><button id="supply-fill" class="quiet">Пополнить запас</button><button id="supply-empty" class="quiet">Опустошить запас</button><button id="empty-all" class="quiet">Опустошить все запасы</button></div><p id="supply-status" role="status"></p><small>Капли и ростки постепенно восстанавливаются. Расстановка действует до перезагрузки страницы.</small></details><section class="needs"><div><label for="food">Сытость <b id="food-number">75%</b></label><progress id="food" max="100" value="75"></progress></div><div><label for="water">Запас воды <b id="water-number">75%</b></label><progress id="water" max="100" value="75"></progress></div></section><section class="cards"><div class="card"><span class="label">Сейчас у Хомы</span><strong class="value status" id="activity">Гуляет по клетке</strong><small id="thought">Столько всего интересного!</small></div><div class="card"><span class="label">Память Хомы</span><strong class="value" id="memory">Изучает клетку</strong><small id="stocks">Корм: 60 · вода: 70</small></div><div class="card"><span class="label">Время вместе</span><strong class="value time" id="time">00:00</strong><small>Никуда не спешим</small></div></section>
-<footer><span>При переносе Хома помнит своё намерение. Если припасы кончатся, он ищет крошки, ростки и капли воды. При сытости ниже 18% зарывается за червячками.</span><a href="./index.html">Другие игры ↗</a></footer></main>
+<section class="water-controls" aria-label="Запасы воды"><strong id="bottle-stock" aria-live="polite">В поилке: 70 / 70</strong><button class="quiet" id="refill-water">Пополнить воду</button><button class="quiet" id="empty-water">Опустошить поилку</button></section><details id="cage-editor"><summary>⚒ Изменить клетку</summary><p>Выбери предмет и нажми в клетке, чтобы переставить его. Или выбери этаж и положение ниже. Пока редактируешь, Хома отдыхает.</p><div class="editor-fields"><label>Инструмент<select id="cage-tool"><option value="move">Переставить предмет</option><option value="wall">Поставить стену</option><option value="erase">Убрать стену</option></select></label><label>Предмет<select id="cage-item"></select></label><label>Этаж<select id="cage-floor"><option value="0">Первый</option><option value="1">Второй</option></select></label><label>Положение<input id="cage-x" type="range" min="150" max="780" value="300"></label></div><div class="water-controls"><button id="supply-fill" class="quiet">Пополнить запас</button><button id="supply-empty" class="quiet">Опустошить запас</button><button id="empty-all" class="quiet">Опустошить все запасы</button></div><p id="supply-status" role="status"></p><div class="water-controls"><button id="place-wall" class="quiet">Поставить стену здесь</button><button id="clear-walls" class="quiet">Убрать все стены</button></div><p id="wall-status" role="status">Стены перекрывают проход на выбранном этаже. Для установки или удаления выбери инструмент и нажми в клетке.</p><div id="wall-list"></div><small>Капли и ростки постепенно восстанавливаются. Расстановка действует до перезагрузки страницы.</small></details><section class="needs"><div><label for="food">Сытость <b id="food-number">75%</b></label><progress id="food" max="100" value="75"></progress></div><div><label for="water">Запас воды <b id="water-number">75%</b></label><progress id="water" max="100" value="75"></progress></div></section><section class="cards"><div class="card"><span class="label">Сейчас у Хомы</span><strong class="value status" id="activity">Гуляет по клетке</strong><small id="thought">Столько всего интересного!</small></div><div class="card"><span class="label">Память Хомы</span><strong class="value" id="memory">Изучает клетку</strong><small id="stocks">Корм: 60 · вода: 70</small></div><div class="card"><span class="label">Время вместе</span><strong class="value time" id="time">00:00</strong><small>Никуда не спешим</small></div></section>
+<footer><span>При переносе Хома помнит своё намерение. Если припасы кончатся, он ищет крошки, ростки и капли воды. Если еду не найти или путь к ней закрыт, зарывается за червячками.</span><a href="./index.html">Другие игры ↗</a></footer></main>
 <dialog id="memory-menu" aria-labelledby="memory-title"><div class="memory-heading"><h2 id="memory-title">Память Хомы</h2><button id="close-memory" aria-label="Закрыть меню памяти">×</button></div>
 <p>Хома сам исследует клетку и записывает наблюдения. Здесь ты можешь исправить его записи или добавить подсказку. Подсказки могут быть ложными: Хома поверит им, но после проверки исправит запись. Реальные запасы от подсказок не меняются.</p>
 <form id="memory-form">
@@ -373,6 +375,19 @@ function draw() {
   wheel();
   ctx.restore();
   bowls();
+  for (const wall of pet.walls) {
+    round(wall.x - 8, wall.y - 270, 16, 94, 3, "#92765b");
+    round(wall.x - 5, wall.y - 270, 4, 90, 2, "#d6ba89");
+    for (let dy = 18; dy < 90; dy += 22)
+      line(
+        wall.x - 8,
+        wall.y - 270 + dy,
+        wall.x + 8,
+        wall.y - 270 + dy,
+        "#725942",
+        2,
+      );
+  }
   const h = petPosition();
   if (pet.activity === "dig") {
     ellipse(pet.x, 409, 24, 8, "#735a46");
@@ -391,7 +406,7 @@ function draw() {
     const selected = cageItems(pet).find(
       (i) => i.id === document.querySelector("#cage-item").value,
     );
-    if (selected) {
+    if (selected && document.querySelector("#cage-tool").value === "move") {
       ctx.strokeStyle = "#b77b47";
       ctx.lineWidth = 3;
       ctx.strokeRect(selected.x - 35, (selected.y ?? 578) - 235, 70, 60);
@@ -476,12 +491,23 @@ function point(e) {
 canvas.addEventListener("pointerdown", (e) => {
   if (document.querySelector("#cage-editor").open) {
     const pos = point(e);
-    moveCageItem(
-      pet,
-      document.querySelector("#cage-item").value,
-      pos.x,
-      pos.y < 380,
-    );
+    const tool = document.querySelector("#cage-tool").value;
+    if (tool === "wall") placeWall(pos.x, pos.y < 380);
+    else if (tool === "erase") {
+      const wall = pet.walls.find(
+        (w) =>
+          Math.abs(w.x - pos.x) < 35 &&
+          Math.abs(w.y - (pos.y < 380 ? UPPER_FLOOR.y : 578)) < 1,
+      );
+      if (wall) removeWall(pet, wall.id);
+      renderWalls();
+    } else
+      moveCageItem(
+        pet,
+        document.querySelector("#cage-item").value,
+        pos.x,
+        pos.y < 380,
+      );
     syncEditor();
     draw();
     return;
@@ -685,6 +711,10 @@ for (const item of cageItems(pet)) {
 }
 function syncEditor() {
   const item = cageItems(pet).find((i) => i.id === itemInput.value);
+  if (document.querySelector("#cage-tool").value !== "move") {
+    waterControls();
+    return;
+  }
   floorInput.value = item.y === UPPER_FLOOR.y ? "1" : "0";
   positionInput.min = floorInput.value === "1" ? 170 : 150;
   positionInput.max = floorInput.value === "1" ? 470 : 780;
@@ -717,6 +747,10 @@ itemInput.onchange = () => {
 };
 for (const input of [floorInput, positionInput])
   input.oninput = () => {
+    if (document.querySelector("#cage-tool").value !== "move") {
+      positionInput.max = floorInput.value === "1" ? 540 : 810;
+      return;
+    }
     moveCageItem(
       pet,
       itemInput.value,
@@ -739,6 +773,49 @@ for (const [id, full] of [
 document.querySelector("#empty-all").onclick = () => {
   for (const item of cageItems(pet)) setSupply(pet, item.id, false);
   syncEditor();
+  draw();
+};
+function renderWalls() {
+  const list = document.querySelector("#wall-list");
+  list.replaceChildren();
+  for (const wall of pet.walls) {
+    const button = document.createElement("button");
+    button.className = "quiet";
+    button.textContent =
+      "Убрать стену: " +
+      (wall.y === UPPER_FLOOR.y ? "2" : "1") +
+      " этаж, " +
+      Math.round(wall.x);
+    button.onclick = () => {
+      removeWall(pet, wall.id);
+      renderWalls();
+      draw();
+    };
+    list.append(button);
+  }
+}
+function placeWall(x, upper) {
+  const added = addWall(pet, x, upper);
+  document.querySelector("#wall-status").textContent = added
+    ? "Стена установлена. Хома не сможет пройти сквозь неё."
+    : "Не получилось: слишком близко Хома или другая стена, либо уже стоят 16 стен.";
+  renderWalls();
+  draw();
+}
+document.querySelector("#cage-tool").onchange = () => {
+  const moving = document.querySelector("#cage-tool").value === "move";
+  itemInput.disabled = !moving;
+  if (!moving) {
+    positionInput.min = 90;
+    positionInput.max = floorInput.value === "1" ? 540 : 810;
+  }
+  syncEditor();
+};
+document.querySelector("#place-wall").onclick = () =>
+  placeWall(Number(positionInput.value), floorInput.value === "1");
+document.querySelector("#clear-walls").onclick = () => {
+  pet.walls = [];
+  renderWalls();
   draw();
 };
 resize();

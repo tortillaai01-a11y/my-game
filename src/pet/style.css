@@ -468,3 +468,5 @@ progress.low::-moz-progress-bar {
   padding: 8px;
   max-width: 100%;
 }
+
+#wall-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }

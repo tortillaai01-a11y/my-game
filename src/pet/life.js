@@ -9,6 +9,7 @@ export const ACTIVITIES = {
   held: "У тебя в руках",
   fall: "Спускается на опилки",
   search: "Ищет припасы",
+  descend: "Спускается к наполнителю",
   dig: "Ищет червячков под землёй",
   observe: "Изучает клетку",
 };
@@ -48,6 +49,7 @@ export function createPet() {
       drink: { x: 787, y: 578 },
     },
     wormsFound: 0,
+    walls: [],
     supplies: { food: 60, water: 70 },
     memory: {},
     discoveries: 0,
@@ -192,18 +194,14 @@ export function forgetMemory(p, id) {
 }
 function seek(p, goal) {
   if (goal === "eat" && p.food < 18) {
-    p.goal = "eat";
-    p.source = null;
-    p.next = "dig";
-    p.target = clamp(p.x, 100, 800);
-    p.targetY = 578;
-    p.activity = "walk";
-    p.reason = "Очень голоден. Под опилками могут быть червячки — поищу!";
+    startDig(p);
     return;
   }
   p.goal = goal;
   const kind = goal === "eat" ? "food" : "water";
-  const candidates = memoryPlaces(p).filter((s) => s.kind === kind);
+  const candidates = memoryPlaces(p).filter(
+    (s) => s.kind === kind && reachable(p, s.x, s.y ?? 578),
+  );
   const estimate = (s) => {
     const m = p.memory[s.id];
     if (m?.injected) return m.present ? 25 : p.age - m.time < 45 ? 0 : 10;
@@ -220,6 +218,16 @@ function seek(p, goal) {
     return score(b) - score(a);
   });
   const site = candidates[0];
+  if (!site || (goal === "eat" && !candidates.some((s) => estimate(s) >= 3))) {
+    if (goal === "eat") startDig(p);
+    else {
+      p.activity = "sniff";
+      p.timer = 3;
+      p.source = null;
+      p.reason = "К воде нет прохода. Подожду, вдруг путь откроется.";
+    }
+    return;
+  }
   p.source = site.id;
   p.target = site.x;
   p.targetY = site.y ?? 578;
@@ -256,7 +264,9 @@ function remember(p, site, found) {
 function explore(p) {
   if (p.age < p.nextExploreAt) return false;
   const sites = memoryPlaces(p).filter(
-    (s) => !p.memory[s.id] || p.age - p.memory[s.id].time > 40,
+    (s) =>
+      reachable(p, s.x, s.y ?? 578) &&
+      (!p.memory[s.id] || p.age - p.memory[s.id].time > 40),
   );
   sites.sort((a, b) => {
     const score = (s) =>
@@ -333,10 +343,21 @@ function resumePet(p) {
     return;
   }
   Object.assign(p, saved);
+  if (saved.activity === "descend") {
+    startDig(p);
+    return;
+  }
   if (
-    ["eat", "drink", "search", "observe", "sleep", "wheel", "dig"].includes(
-      saved.activity,
-    )
+    [
+      "eat",
+      "drink",
+      "search",
+      "observe",
+      "sleep",
+      "wheel",
+      "dig",
+      "descend",
+    ].includes(saved.activity)
   ) {
     p.next = saved.activity;
     p.activity = "walk";
@@ -350,6 +371,17 @@ export function releasePet(p) {
     p.x >= UPPER_FLOOR.left && p.x <= UPPER_FLOOR.right && p.y <= UPPER_FLOOR.y
       ? UPPER_FLOOR.y
       : Math.max(578, p.y);
+  // A carried hamster may cross a wall, but must not land inside one.
+  const overlap = p.walls.find(
+    (w) => w.y === p.floor && Math.abs(p.x - w.x) <= 30,
+  );
+  if (overlap) {
+    const safe = [overlap.x - 31, overlap.x + 31].filter(
+      (x) => x >= 80 && x <= 820 && !blockedSegment(p, x, p.floor, x, p.floor),
+    );
+    if (safe.length)
+      p.x = safe.sort((a, b) => Math.abs(a - p.x) - Math.abs(b - p.x))[0];
+  }
   p.level = p.floor === UPPER_FLOOR.y ? 1 : 0;
   p.falling = p.y < p.floor;
   p.velocity = 0;
@@ -391,6 +423,8 @@ export function updatePet(p, dt, random = Math.random) {
   if (
     p.food < 18 &&
     p.next !== "dig" &&
+    p.next !== "descend" &&
+    p.activity !== "descend" &&
     p.activity !== "dig" &&
     p.activity !== "eat"
   )
@@ -406,6 +440,15 @@ export function updatePet(p, dt, random = Math.random) {
     } else if (p.level !== Number(upper)) {
       x = p.level ? UPPER_FLOOR.right : UPPER_FLOOR.rampBottom;
       y = p.level ? UPPER_FLOOR.y : 578;
+    }
+    if (blockedSegment(p, p.x, p.y, x, y)) {
+      if (p.goal === "eat" || p.next === "dig") startDig(p);
+      else {
+        p.activity = "sniff";
+        p.timer = 3;
+        p.reason = "Здесь стена. Поищу другое занятие.";
+      }
+      return p;
     }
     const dx = x - p.x,
       dy = y - p.y,
@@ -440,6 +483,23 @@ export function updatePet(p, dt, random = Math.random) {
     }
   } else {
     p.timer -= dt;
+    if (p.activity === "descend") {
+      const dx = p.target - p.x;
+      if (Math.abs(dx) > dt * 43) {
+        p.x += Math.sign(dx) * dt * 43;
+        return p;
+      }
+      p.x = p.target;
+      p.y = Math.min(578, p.y + dt * 65);
+      if (p.y === 578) {
+        p.level = 0;
+        p.climbing = false;
+        p.activity = "dig";
+        p.next = "dig";
+        p.timer = 6;
+      }
+      return p;
+    }
     if (p.activity === "dig") {
       p.y = Math.min(626, p.y + dt * 18);
       if (p.timer <= 0) {
@@ -481,7 +541,8 @@ export function updatePet(p, dt, random = Math.random) {
           return p;
         }
       }
-      seek(p, p.goal);
+      if (p.goal === "eat") startDig(p);
+      else seek(p, p.goal);
       return p;
     }
     if (p.activity === "eat" || p.activity === "drink") {
@@ -605,4 +666,91 @@ export function setSupply(p, id, full) {
     const site = p.sites.find((s) => s.id === id && !s.custom);
     if (site) site.stock = full ? site.capacity : 0;
   }
+}
+
+// Walls occupy one floor. Expand them by the hamster body when checking paths.
+export function blockedSegment(p, ax, ay, bx, by) {
+  return p.walls.some((w) => {
+    let low = 0,
+      high = 1;
+    for (const [a, b, min, max] of [
+      [ax, bx, w.x - 30, w.x + 30],
+      [ay, by, w.y - 90, w.y + 40],
+    ]) {
+      const d = b - a;
+      if (Math.abs(d) < 0.00001) {
+        if (a < min || a > max) return false;
+      } else {
+        const t1 = (min - a) / d,
+          t2 = (max - a) / d;
+        low = Math.max(low, Math.min(t1, t2));
+        high = Math.min(high, Math.max(t1, t2));
+        if (low > high) return false;
+      }
+    }
+    return true;
+  });
+}
+export function reachable(p, x, y) {
+  const upper = y === UPPER_FLOOR.y;
+  const points = [[p.x, p.y]];
+  if (p.climbing) points.push(upper ? [560, UPPER_FLOOR.y] : [720, 578]);
+  else if (p.level !== Number(upper)) {
+    points.push(p.level ? [560, UPPER_FLOOR.y] : [720, 578]);
+    points.push(upper ? [560, UPPER_FLOOR.y] : [720, 578]);
+  }
+  points.push([x, y]);
+  return points
+    .slice(1)
+    .every((v, i) => !blockedSegment(p, ...points[i], ...v));
+}
+function startDig(p) {
+  p.goal = "eat";
+  p.source = null;
+  p.reason = "Еды не нашёл или путь закрыт. Поищу червячков под опилками!";
+  const x = clamp(p.x, 80, 820);
+  p.next = "dig";
+  p.target = x;
+  p.targetY = 578;
+  p.activity = "walk";
+  if (!reachable(p, x, 578)) {
+    // From a blocked shelf, climb down its front on the same side of the wall.
+    const landing = [x, x - 40, x + 40, x - 80, x + 80].find(
+      (v) =>
+        v >= 80 &&
+        v <= 820 &&
+        !blockedSegment(p, p.x, p.y, v, p.y) &&
+        !blockedSegment(p, v, p.y, v, 578),
+    );
+    if (landing === undefined) {
+      p.activity = "sniff";
+      p.timer = 3;
+      p.reason = "Всё перегорожено. Нужен проход к наполнителю.";
+      return;
+    }
+    p.target = landing;
+    p.targetY = p.y;
+    p.next = "descend";
+    p.activity = "descend";
+    p.climbing = false;
+  }
+}
+export function addWall(p, x, upper) {
+  if (!Number.isFinite(x) || p.walls.length >= 16) return false;
+  x = clamp(x, 90, upper ? 540 : 810);
+  const y = upper ? UPPER_FLOOR.y : 578;
+  if (Math.abs(p.x - x) < 45 && p.y >= y - 90 && p.y <= y + 80) return false;
+  if (
+    (p.activity === "descend" || p.next === "descend") &&
+    Math.abs(p.target - x) < 45
+  )
+    return false;
+  if (p.walls.some((w) => w.y === y && Math.abs(w.x - x) < 65)) return false;
+  let n = 1;
+  while (p.walls.some((w) => w.id === "wall-" + n)) n++;
+  p.walls.push({ id: "wall-" + n, x, y });
+  return true;
+}
+export function removeWall(p, id) {
+  p.walls = p.walls.filter((w) => w.id !== id);
 }

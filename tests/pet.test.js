@@ -2,6 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   createPet,
+  addWall,
+  removeWall,
+  reachable,
   moveCageItem,
   setSupply,
   cageItems,
@@ -268,4 +271,76 @@ test("starving hamster descends from upstairs, digs underground, eats worms and 
   assert.equal(p.wormsFound, 1);
   assert.ok(p.food > 20);
   assert.equal(p.y, 578);
+});
+
+test("walls block both floor routes and the ramp, and removal restores access", () => {
+  const p = createPet();
+  assert.ok(addWall(p, 450, false));
+  assert.equal(reachable(p, 640, 578), false);
+  assert.equal(reachable(p, 120, 578), true);
+  assert.equal(reachable(p, 340, 245), false);
+  removeWall(p, p.walls[0].id);
+  assert.equal(reachable(p, 640, 578), true);
+  assert.ok(addWall(p, 480, true));
+  assert.equal(reachable(p, 340, 245), false);
+  assert.equal(reachable(p, 640, 578), true);
+});
+test("a newly blocked food trip triggers digging before starvation without crossing the wall", () => {
+  const p = { ...createPet(), food: 35 };
+  updatePet(p, 0.1);
+  assert.equal(p.source, "main-food");
+  addWall(p, 450, false);
+  for (let i = 0; i < 200 && !p.wormsFound; i++) {
+    updatePet(p, 0.1, () => 0.4);
+    assert.ok(p.x < 420);
+  }
+  assert.equal(p.wormsFound, 1);
+  assert.ok(p.food > 50);
+  assert.equal(p.supplies.food, 60);
+});
+test("unsuccessful food search triggers digging even at moderate hunger", () => {
+  const p = { ...createPet(), food: 35, x: 450 };
+  editMemory(p, { kind: "food", x: 450, present: true });
+  for (let i = 0; i < 200 && !p.wormsFound; i++) updatePet(p, 0.1, () => 0.4);
+  assert.equal(p.wormsFound, 1);
+  assert.ok(p.food > 50);
+});
+test("blocked upstairs hamster climbs down on its side to forage", () => {
+  const p = { ...createPet(), x: 300, y: 245, level: 1, food: 35 };
+  updatePet(p, 0.1);
+  addWall(p, 450, true);
+  for (let i = 0; i < 300 && !p.wormsFound; i++) {
+    updatePet(p, 0.1, () => 0.4);
+    assert.ok(p.x < 420);
+  }
+  assert.equal(p.wormsFound, 1);
+});
+test("carrying over a wall lands beside it and does not change needs", () => {
+  const p = createPet();
+  addWall(p, 450, false);
+  holdPet(p, 450, 400);
+  releasePet(p);
+  while (p.falling) updatePet(p, 0.1);
+  assert.ok(Math.abs(p.x - 450) > 30);
+  assert.equal(p.food, 75);
+});
+
+test("a wall added at the foot of the ramp does not trap a food-seeking hamster", () => {
+  const p = {
+    ...createPet(),
+    x: 650,
+    y: 432,
+    level: 1,
+    climbing: true,
+    goal: "eat",
+    next: "eat",
+    target: 640,
+    targetY: 578,
+    source: "main-food",
+    food: 30,
+  };
+  assert.ok(addWall(p, 720, false));
+  for (let i = 0; i < 250 && !p.wormsFound; i++) updatePet(p, 0.1, () => 0.4);
+  assert.equal(p.wormsFound, 1);
+  assert.ok(p.x < 690);
 });
