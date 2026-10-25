@@ -11,6 +11,7 @@ export const ACTIVITIES = {
   search: "Ищет припасы",
   observe: "Изучает клетку",
 };
+export const UPPER_FLOOR = { left: 80, right: 560, y: 175, rampBottom: 720 };
 const places = { eat: 640, drink: 787, wheel: 420, sleep: 185 };
 const clamp = (n, min = 0, max = 100) => Math.max(min, Math.min(max, n));
 export function createPet() {
@@ -18,6 +19,9 @@ export function createPet() {
     x: 300,
     y: 398,
     target: 550,
+    targetY: 398,
+    level: 0,
+    climbing: false,
     facing: 1,
     activity: "walk",
     next: "observe",
@@ -41,6 +45,16 @@ export function createPet() {
     memory: {},
     discoveries: 0,
     sites: [
+      {
+        id: "upstairs-seeds",
+        kind: "food",
+        name: "семечки на втором этаже",
+        x: 340,
+        y: 175,
+        stock: 18,
+        capacity: 18,
+        regen: 0,
+      },
       {
         id: "crumbs",
         kind: "food",
@@ -85,6 +99,7 @@ function choose(p, action, reason, random) {
   p.source = null;
   p.next = action;
   p.target = places[action] ?? 110 + random() * 680;
+  p.targetY = 398;
   p.activity = "walk";
   p.reason = reason;
 }
@@ -190,6 +205,7 @@ function seek(p, goal) {
   const site = candidates[0];
   p.source = site.id;
   p.target = site.x;
+  p.targetY = site.y ?? 398;
   if (estimate(site) < 3) {
     p.activity = "sniff";
     p.next = "search";
@@ -237,6 +253,7 @@ function explore(p) {
   p.goal = null;
   p.source = site.id;
   p.target = site.x;
+  p.targetY = site.y ?? 398;
   p.next = "observe";
   p.activity = "walk";
   p.reason =
@@ -247,7 +264,9 @@ function explore(p) {
 }
 function observeNearby(p, dt) {
   const site = memoryPlaces(p)
-    .filter((s) => Math.abs(s.x - p.x) < 32)
+    .filter(
+      (s) => Math.abs(s.x - p.x) < 32 && Math.abs((s.y ?? 398) - p.y) < 20,
+    )
     .sort((a, b) => Math.abs(a.x - p.x) - Math.abs(b.x - p.x))[0];
   if (!site) {
     p.observing = null;
@@ -271,6 +290,7 @@ export function holdPet(p, x, y) {
       activity: p.activity,
       next: p.next,
       target: p.target,
+      targetY: p.targetY,
       timer: p.timer,
       reason: p.reason,
       goal: p.goal,
@@ -308,7 +328,12 @@ function resumePet(p) {
 export function releasePet(p) {
   if (!p.held) return;
   p.held = false;
-  p.floor = Math.max(398, p.y);
+  p.climbing = false;
+  p.floor =
+    p.x >= UPPER_FLOOR.left && p.x <= UPPER_FLOOR.right && p.y <= UPPER_FLOOR.y
+      ? UPPER_FLOOR.y
+      : Math.max(398, p.y);
+  p.level = p.floor === UPPER_FLOOR.y ? 1 : 0;
   p.falling = p.y < p.floor;
   p.velocity = 0;
   if (p.falling) p.activity = "fall";
@@ -348,12 +373,33 @@ export function updatePet(p, dt, random = Math.random) {
   // An active need remains the goal until satisfied, including while carried.
   if (urgent && !p.goal) seek(p, urgent);
   if (p.activity === "walk") {
-    const d = p.target - p.x;
-    p.facing = d < 0 ? -1 : 1;
-    if (Math.abs(d) <= dt * 43) {
-      p.x = p.target;
-      p.y = 398;
-      p.floor = 398;
+    const upper = p.targetY === UPPER_FLOOR.y;
+    let x = p.target,
+      y = p.targetY;
+    if (p.climbing) {
+      x = upper ? UPPER_FLOOR.right : UPPER_FLOOR.rampBottom;
+      y = upper ? UPPER_FLOOR.y : 398;
+    } else if (p.level !== Number(upper)) {
+      x = p.level ? UPPER_FLOOR.right : UPPER_FLOOR.rampBottom;
+      y = p.level ? UPPER_FLOOR.y : 398;
+    }
+    const dx = x - p.x,
+      dy = y - p.y,
+      distance = Math.hypot(dx, dy);
+    if (dx) p.facing = dx < 0 ? -1 : 1;
+    if (distance <= dt * 43) {
+      p.x = x;
+      p.y = y;
+      p.floor = y;
+      if (p.climbing) {
+        p.climbing = false;
+        p.level = Number(upper);
+        return p;
+      }
+      if (p.level !== Number(upper)) {
+        p.climbing = true;
+        return p;
+      }
       p.activity = p.next;
       p.timer =
         p.next === "sleep"
@@ -364,7 +410,10 @@ export function updatePet(p, dt, random = Math.random) {
               ? Math.max(1, 3 - p.discoveries * 0.35)
               : 4 + random() * 5;
       p.visits++;
-    } else p.x += Math.sign(d) * dt * 43;
+    } else {
+      p.x += (dx / distance) * dt * 43;
+      p.y += (dy / distance) * dt * 43;
+    }
   } else {
     p.timer -= dt;
     if (p.activity === "observe" && p.timer <= 0) {
@@ -473,4 +522,9 @@ export function updatePet(p, dt, random = Math.random) {
     }
   }
   return p;
+}
+
+// Changing the bottle never changes thirst or writes memories for the hamster.
+export function setWaterSupply(p, full) {
+  p.supplies.water = full ? 70 : 0;
 }

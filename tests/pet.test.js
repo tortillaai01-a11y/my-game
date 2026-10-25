@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   createPet,
+  setWaterSupply,
   updatePet,
   ACTIVITIES,
   holdPet,
@@ -185,4 +186,47 @@ test("a forgotten real location is learned again during exploration", () => {
   }
   assert.ok(p.memory.sprouts);
   assert.equal(p.memory.sprouts.injected, undefined);
+});
+
+test("hamster explores upstairs via ramp and returns downstairs without teleporting", () => {
+  const p = createPet();
+  let climbed = false,
+    learned = false,
+    returned = false;
+  for (let i = 0; i < 2400; i++) {
+    p.food = p.water = p.energy = 90;
+    const x = p.x,
+      y = p.y;
+    updatePet(p, 0.1, () => 0.4);
+    assert.ok(Math.hypot(p.x - x, p.y - y) <= 4.301);
+    if (p.climbing && p.y < 390) climbed = true;
+    if (p.memory["upstairs-seeds"]) learned = true;
+    if (learned && p.y === 398) returned = true;
+  }
+  assert.ok(climbed && learned && returned);
+});
+test("dropping above the shelf lands upstairs and preserves needs", () => {
+  const p = createPet();
+  holdPet(p, 340, 167);
+  const food = p.food,
+    water = p.water;
+  releasePet(p);
+  while (p.falling) updatePet(p, 0.1);
+  assert.equal(p.y, 175);
+  assert.equal(p.level, 1);
+  assert.equal(p.food, food);
+  assert.equal(p.water, water);
+});
+test("bottle controls change actual stock without changing needs or memories", () => {
+  const p = createPet();
+  editMemory(p, { id: "main-water", kind: "water", present: false });
+  const memory = structuredClone(p.memory),
+    water = p.water;
+  setWaterSupply(p, false);
+  assert.equal(p.supplies.water, 0);
+  setWaterSupply(p, true);
+  setWaterSupply(p, true);
+  assert.equal(p.supplies.water, 70);
+  assert.equal(p.water, water);
+  assert.deepEqual(p.memory, memory);
 });

@@ -426,3 +426,15 @@ progress.low::-moz-progress-bar {
   flex-wrap: wrap;
   justify-content: flex-end;
 }
+
+.water-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 4px;
+  font-size: 13px;
+}
+.water-controls strong {
+  margin-right: auto;
+}

@@ -149,3 +149,20 @@ test("hamster writes its own memory without editing and the player can change it
     false,
   );
 });
+
+test("water buttons empty and refill the real bottle even while paused", async ({
+  page,
+}) => {
+  await page.goto("/my-game/pet.html");
+  await page.locator("#pause").click();
+  const before = await page.evaluate(() => petState());
+  await page.locator("#empty-water").click();
+  expect((await page.evaluate(() => petState())).supplies.water).toBe(0);
+  await expect(page.locator("#bottle-stock")).toHaveText("В поилке: 0 / 70");
+  await page.locator("#refill-water").click();
+  const after = await page.evaluate(() => petState());
+  expect(after.supplies.water).toBe(70);
+  expect(after.water).toBe(before.water);
+  expect(after.memory).toEqual(before.memory);
+  await expect(page.locator("#bottle-stock")).toHaveText("В поилке: 70 / 70");
+});

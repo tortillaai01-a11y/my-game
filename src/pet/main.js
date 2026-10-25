@@ -1,6 +1,8 @@
 import "./style.css";
 import {
   createPet,
+  setWaterSupply,
+  UPPER_FLOOR,
   updatePet,
   ACTIVITIES,
   holdPet,
@@ -12,9 +14,9 @@ import {
 } from "./life.js";
 document.querySelector("#app").innerHTML = `
 <main class="shell"><header><div class="brand"><div class="logo">🐹</div><div><h1>Хома дома</h1><div class="tag">МАЛЕНЬКАЯ ЖИЗНЬ РЯДОМ</div></div></div><div class="header-actions"><button class="quiet" id="open-memory">Память</button><button class="quiet" id="pause">Ⅱ Пауза</button></div></header>
-<section class="intro"><div><div class="eyebrow">ЗНАКОМЬСЯ, ЭТО ХОМА</div><h2>У него свои маленькие дела.</h2><p>Он сам выбирает, куда пойти. Возьми Хому мышью или пальцем и перенеси внутри клетки.</p></div><div class="live"><span class="dot"></span><span id="live">Жизнь идёт</span></div></section>
+<section class="intro"><div><div class="eyebrow">ЗНАКОМЬСЯ, ЭТО ХОМА</div><h2>У него свои маленькие дела.</h2><p>Он сам выбирает, куда пойти. Хома сам поднимается на второй этаж по лесенке. Возьми Хому мышью или пальцем и перенеси внутри клетки.</p></div><div class="live"><span class="dot"></span><span id="live">Жизнь идёт</span></div></section>
 <div class="habitat"><canvas id="cage" width="900" height="510" role="img" aria-label="Двумерная клетка: Хома самостоятельно гуляет, ест, пьёт, бегает в колесе и отдыхает."></canvas><div class="paused" id="overlay" hidden><span>Тихая пауза ☁</span></div></div>
-<section class="needs"><div><label for="food">Сытость <b id="food-number">75%</b></label><progress id="food" max="100" value="75"></progress></div><div><label for="water">Запас воды <b id="water-number">75%</b></label><progress id="water" max="100" value="75"></progress></div></section><section class="cards"><div class="card"><span class="label">Сейчас у Хомы</span><strong class="value status" id="activity">Гуляет по клетке</strong><small id="thought">Столько всего интересного!</small></div><div class="card"><span class="label">Память Хомы</span><strong class="value" id="memory">Изучает клетку</strong><small id="stocks">Корм: 60 · вода: 70</small></div><div class="card"><span class="label">Время вместе</span><strong class="value time" id="time">00:00</strong><small>Никуда не спешим</small></div></section>
+<section class="water-controls" aria-label="Запасы воды"><strong id="bottle-stock" aria-live="polite">В поилке: 70 / 70</strong><button class="quiet" id="refill-water">Пополнить воду</button><button class="quiet" id="empty-water">Опустошить поилку</button></section><section class="needs"><div><label for="food">Сытость <b id="food-number">75%</b></label><progress id="food" max="100" value="75"></progress></div><div><label for="water">Запас воды <b id="water-number">75%</b></label><progress id="water" max="100" value="75"></progress></div></section><section class="cards"><div class="card"><span class="label">Сейчас у Хомы</span><strong class="value status" id="activity">Гуляет по клетке</strong><small id="thought">Столько всего интересного!</small></div><div class="card"><span class="label">Память Хомы</span><strong class="value" id="memory">Изучает клетку</strong><small id="stocks">Корм: 60 · вода: 70</small></div><div class="card"><span class="label">Время вместе</span><strong class="value time" id="time">00:00</strong><small>Никуда не спешим</small></div></section>
 <footer><span>При переносе Хома помнит своё намерение. Если припасы кончатся, он ищет крошки, ростки и капли воды.</span><a href="./index.html">Другие игры ↗</a></footer></main>
 <dialog id="memory-menu" aria-labelledby="memory-title"><div class="memory-heading"><h2 id="memory-title">Память Хомы</h2><button id="close-memory" aria-label="Закрыть меню памяти">×</button></div>
 <p>Хома сам исследует клетку и записывает наблюдения. Здесь ты можешь исправить его записи или добавить подсказку. Подсказки могут быть ложными: Хома поверит им, но после проверки исправит запись. Реальные запасы от подсказок не меняются.</p>
@@ -48,6 +50,26 @@ document.querySelector("#pause").onclick = () => setPause(!paused);
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) setPause(true);
 });
+function waterControls() {
+  document.querySelector("#stocks").textContent =
+    "Корм: " +
+    Math.ceil(pet.supplies.food) +
+    " · вода: " +
+    Math.ceil(pet.supplies.water);
+
+  document.querySelector("#bottle-stock").textContent =
+    "В поилке: " + Math.ceil(pet.supplies.water) + " / 70";
+}
+for (const [id, full] of [
+  ["refill-water", true],
+  ["empty-water", false],
+]) {
+  document.querySelector("#" + id).onclick = () => {
+    setWaterSupply(pet, full);
+    waterControls();
+    draw();
+  };
+}
 function resize() {
   const dpr = Math.min(devicePixelRatio || 1, 2);
   canvas.width = 900 * dpr;
@@ -287,6 +309,15 @@ function draw() {
     round(0, 0, b.l, 2, 1, b.c > 0.5 ? "#ecd5a6" : "#bd9c6b66");
     ctx.restore();
   }
+  // An accessible wooden mezzanine and its sloped, grippy ladder.
+  round(80, UPPER_FLOOR.y, 480, 11, 4, "#b68b60");
+  round(80, UPPER_FLOOR.y, 480, 3, 2, "#efd3a2");
+  line(560, 180, 720, 403, "#bd966d", 18);
+  for (let i = 0; i <= 14; i++) {
+    const x = 560 + (160 * i) / 14,
+      y = 180 + (223 * i) / 14;
+    line(x - 7, y + 4, x + 7, y - 4, "#ecd5a6", 4);
+  }
   for (const site of pet.sites) {
     if (site.kind === "food" && site.id === "sprouts") {
       for (let i = 0; i < 5; i++) {
@@ -305,7 +336,7 @@ function draw() {
       for (let i = 0; i < Math.min(5, Math.ceil(site.stock / 4)); i++)
         ellipse(
           site.x - 12 + i * 6,
-          401 + (i % 2) * 3,
+          (site.y ?? 398) + 3 + (i % 2) * 3,
           site.kind === "water" ? 2 : 3,
           2,
           site.kind === "water" ? "#9abfc4" : "#d8ad66",
@@ -351,6 +382,7 @@ function frame(now) {
   }
   if (hudTime > 0.2 || lastActivity !== pet.activity) {
     hudTime = 0;
+    waterControls();
     lastActivity = pet.activity;
     document.querySelector("#activity").textContent = ACTIVITIES[pet.activity];
     document.querySelector("#thought").textContent = pet.reason;
@@ -358,11 +390,6 @@ function frame(now) {
       .length
       ? "Записей: " + Object.keys(pet.memory).length
       : "Изучает клетку";
-    document.querySelector("#stocks").textContent =
-      "Корм: " +
-      Math.ceil(pet.supplies.food) +
-      " · вода: " +
-      Math.ceil(pet.supplies.water);
     for (const [key, value] of [
       ["food", pet.food],
       ["water", pet.water],
