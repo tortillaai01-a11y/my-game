@@ -9,6 +9,7 @@ export default defineConfig({
         shooter: "shooter.html",
         rocket: "rocket.html",
         pet: "pet.html",
+        salvage: "salvage.html",
       },
     },
   },

@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { batchStatic } from "../simulator/visuals.js";
 
-function texture(kind) {
+export function texture(kind) {
   const c = document.createElement("canvas");
   c.width = c.height = 512;
   const ctx = c.getContext("2d");
